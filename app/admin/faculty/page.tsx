@@ -1,20 +1,21 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import ProjectsTable from "@/components/ProjectsTable";
+import FacultyTable from "@/components/FacultyTable";
 import {
   GraduationCap,
   FolderOpen,
+  Users,
   LogOut,
   LayoutDashboard,
+  UserPlus,
 } from "lucide-react";
 import Link from "next/link";
-import page from "../dashboard/page";
+import page from "../projects/page";
 
-export default function FacultyProjectsPage() {
+export default function AdminFacultyPage() {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -24,8 +25,8 @@ export default function FacultyProjectsPage() {
   // ─────────────────────────────────────────────
   useEffect(() => {
     if (!loading && !user) router.push("/login");
-    if (!loading && user && user.role !== "faculty") {
-      router.push("/admin/dashboard");
+    if (!loading && user && user.role !== "admin") {
+      router.push("/faculty/dashboard");
     }
   }, [user, loading, router]);
 
@@ -62,18 +63,25 @@ export default function FacultyProjectsPage() {
         {/* Nav Links */}
         <nav className="flex flex-col gap-1">
           <Link
-            href="/faculty/dashboard"
+            href="/admin/dashboard"
             className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
           >
             <LayoutDashboard size={17} />
             Dashboard
           </Link>
           <Link
-            href="/faculty/projects"
-            className="flex items-center gap-3 rounded-lg bg-zinc-800 px-3 py-2.5 text-sm font-medium text-white"
+            href="/admin/projects"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
           >
             <FolderOpen size={17} />
-            My Projects
+            Projects
+          </Link>
+          <Link
+            href="/admin/faculty"
+            className="flex items-center gap-3 rounded-lg bg-zinc-800 px-3 py-2.5 text-sm font-medium text-white"
+          >
+            <Users size={17} />
+            Faculty
           </Link>
         </nav>
 
@@ -82,8 +90,8 @@ export default function FacultyProjectsPage() {
           <div className="mb-3 rounded-lg bg-zinc-800 px-3 py-3">
             <p className="text-sm font-medium text-white">{user.name}</p>
             <p className="text-xs text-zinc-400">{user.email}</p>
-            <span className="mt-1.5 inline-block rounded-full bg-green-600 px-2 py-0.5 text-xs font-medium text-white">
-              Faculty
+            <span className="mt-1.5 inline-block rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white">
+              Admin
             </span>
           </div>
           <button
@@ -104,19 +112,21 @@ export default function FacultyProjectsPage() {
         {/* Page Header */}
         <div className="mb-8 flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Projects</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Faculty</h1>
             <p className="mt-1 text-sm text-gray-500">
-              Projects you are supervising. Contact admin to update status.
+              Manage faculty members — view details, edit info, or add new members.
             </p>
           </div>
+
+          {/* Add Faculty Button */}
+          <button className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700">
+            <UserPlus size={15} />
+            Add Faculty
+          </button>
         </div>
 
-        {/* Projects Table — faculty mode */}
-        {/* supervisorId passed as name for now — will use real uid later */}
-        <ProjectsTable
-          isAdmin={false}
-          supervisorId="Dr. Ayesha Malik"
-        />
+        {/* Faculty Table */}
+        <FacultyTable />
 
       </main>
     </div>
