@@ -4,12 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import ProjectsTable from "@/components/ProjectsTable";
-import {
-  GraduationCap,
-  FolderOpen,
-  LogOut,
-  LayoutDashboard,
-} from "lucide-react";
+import { GraduationCap, FolderOpen, LogOut, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 
 export default function FacultyProjectsPage() {
@@ -17,17 +12,17 @@ export default function FacultyProjectsPage() {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
+  // ─── Route protection ───────────────────────
   useEffect(() => {
-    if (!loading && !user) router.push("/login");
-    if (!loading && user && user.role !== "faculty") {
-      router.push("/admin/dashboard");
-    }
+    if (loading) return;
+    if (!user) { router.push("/login"); return; }
+    if (user.role !== "faculty") router.push("/admin/dashboard");
   }, [user, loading, router]);
 
   const handleLogout = async () => {
     setLoggingOut(true);
     await logout();
-    router.push("/login");
+    window.location.href = "/login";
   };
 
   if (loading) {
@@ -50,36 +45,24 @@ export default function FacultyProjectsPage() {
           <span className="text-base font-bold text-white">Capstone Portal</span>
         </div>
         <nav className="flex flex-col gap-1">
-          <Link
-            href="/faculty/dashboard"
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
-          >
-            <LayoutDashboard size={17} />
-            Dashboard
+          <Link href="/faculty/dashboard"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors">
+            <LayoutDashboard size={17} />Dashboard
           </Link>
-          <Link
-            href="/faculty/projects"
-            className="flex items-center gap-3 rounded-lg bg-zinc-800 px-3 py-2.5 text-sm font-medium text-white"
-          >
-            <FolderOpen size={17} />
-            My Projects
+          <Link href="/faculty/projects"
+            className="flex items-center gap-3 rounded-lg bg-zinc-800 px-3 py-2.5 text-sm font-medium text-white">
+            <FolderOpen size={17} />My Projects
           </Link>
         </nav>
         <div className="mt-auto">
           <div className="mb-3 rounded-lg bg-zinc-800 px-3 py-3">
             <p className="text-sm font-medium text-white">{user.name}</p>
             <p className="text-xs text-zinc-400">{user.email}</p>
-            <span className="mt-1.5 inline-block rounded-full bg-green-600 px-2 py-0.5 text-xs font-medium text-white">
-              Faculty
-            </span>
+            <span className="mt-1.5 inline-block rounded-full bg-green-600 px-2 py-0.5 text-xs font-medium text-white">Faculty</span>
           </div>
-          <button
-            onClick={handleLogout}
-            disabled={loggingOut}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors disabled:opacity-50"
-          >
-            <LogOut size={17} />
-            {loggingOut ? "Signing out..." : "Sign out"}
+          <button onClick={handleLogout} disabled={loggingOut}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors disabled:opacity-50">
+            <LogOut size={17} />{loggingOut ? "Signing out..." : "Sign out"}
           </button>
         </div>
       </aside>
@@ -88,23 +71,16 @@ export default function FacultyProjectsPage() {
       <main className="ml-60 flex-1 px-8 py-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">My Projects</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Projects you are supervising. Contact admin to update status.
-          </p>
+          <p className="mt-1 text-sm text-gray-500">Projects you are supervising. Contact admin to update status.</p>
         </div>
 
-        {/* Only render table when uid is confirmed */}
         {user.uid ? (
-          <ProjectsTable
-            isAdmin={false}
-            supervisorId={user.uid}
-          />
+          <ProjectsTable isAdmin={false} supervisorId={user.uid} />
         ) : (
           <div className="flex items-center justify-center py-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
           </div>
         )}
-
       </main>
     </div>
   );

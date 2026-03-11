@@ -91,10 +91,7 @@ const fetchProjects = async () => {
       ...d.data(),
     })) as Project[];
     
-    // DEBUG — remove after fixing
-    console.log("All projects supervisorIds:", data.map(p => ({ title: p.title, supervisorId: p.supervisorId })));
-    console.log("Current user supervisorId prop:", supervisorId);
-    
+  
     setProjects(data);
   } catch {
     toast.error("Failed to load projects");
