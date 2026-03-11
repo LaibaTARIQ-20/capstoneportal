@@ -1,6 +1,6 @@
 # 🎓 Capstone Portal
 
-A full-stack FYP (Final Year Project) management portal built with **Next.js**, **TypeScript**, **Tailwind CSS**, and **Firebase**. Supports two roles — Admin and Faculty — with real-time data, authentication, and complete CRUD operations.
+A full-stack FYP (Final Year Project) management portal built with **Next.js**, **TypeScript**, **Tailwind CSS**, and **Firebase**. Supports two roles: Admin and Faculty with real-time data, authentication, and complete CRUD operations.
 
 ---
 
@@ -9,7 +9,7 @@ A full-stack FYP (Final Year Project) management portal built with **Next.js**, 
 ### Admin
 - Login with email/password or Google
 - View all projects with search and filtering
-- Add new projects via modal form
+- Add new projects via a modal form
 - Change project status (Pending → Under Review → Accepted → Rejected)
 - Delete projects
 - View all faculty members
@@ -26,7 +26,7 @@ A full-stack FYP (Final Year Project) management portal built with **Next.js**, 
 - Login with email/password or Google
 - View only their own supervised projects
 - Dashboard with personal project stats
-- See project status updates made by admin
+- See project status updates made by the admin
 <img width="512" height="251" alt="image" src="https://github.com/user-attachments/assets/9a59d7de-c24a-4a9c-9e2a-610d2514bc93" />
 <img width="512" height="245" alt="image" src="https://github.com/user-attachments/assets/41fbf7ab-be90-41e2-82b2-db45cd95f313" />
 
@@ -94,7 +94,7 @@ cd capstoneportal
 npm install
 ```
 
-### 3. Create Firebase project
+### 3. Create a Firebase project
 
 - Go to [firebase.google.com](https://firebase.google.com)
 - Create a new project
@@ -121,7 +121,7 @@ In Firebase Console → Firestore → Rules:
 
 ```
 rules_version = '2';
-service cloud.firestore {
+Service Cloud.firestore {
   match /databases/{database}/documents {
     match /{document=**} {
       allow read, write: if true;
@@ -130,7 +130,7 @@ service cloud.firestore {
 }
 ```
 
-### 6. Create admin account
+### 6. Create an admin account
 
 In Firebase Console → Authentication → Add user:
 
@@ -162,7 +162,7 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ### 8. Seed dummy data (optional)
 
-After logging in as admin go to:
+After logging in as admin, go to:
 
 ```
 http://localhost:3000/admin/seed
