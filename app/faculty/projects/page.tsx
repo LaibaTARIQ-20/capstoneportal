@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -12,16 +11,12 @@ import {
   LayoutDashboard,
 } from "lucide-react";
 import Link from "next/link";
-import page from "../dashboard/page";
 
 export default function FacultyProjectsPage() {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // ─────────────────────────────────────────────
-  // Route protection
-  // ─────────────────────────────────────────────
   useEffect(() => {
     if (!loading && !user) router.push("/login");
     if (!loading && user && user.role !== "faculty") {
@@ -50,16 +45,10 @@ export default function FacultyProjectsPage() {
 
       {/* Sidebar */}
       <aside className="fixed left-0 top-0 flex h-full w-60 flex-col bg-zinc-900 px-4 py-6">
-
-        {/* Brand */}
         <div className="mb-8 flex items-center gap-2 px-2">
           <GraduationCap size={22} className="text-blue-400" />
-          <span className="text-base font-bold text-white">
-            Capstone Portal
-          </span>
+          <span className="text-base font-bold text-white">Capstone Portal</span>
         </div>
-
-        {/* Nav Links */}
         <nav className="flex flex-col gap-1">
           <Link
             href="/faculty/dashboard"
@@ -76,8 +65,6 @@ export default function FacultyProjectsPage() {
             My Projects
           </Link>
         </nav>
-
-        {/* User + Logout */}
         <div className="mt-auto">
           <div className="mb-3 rounded-lg bg-zinc-800 px-3 py-3">
             <p className="text-sm font-medium text-white">{user.name}</p>
@@ -95,28 +82,28 @@ export default function FacultyProjectsPage() {
             {loggingOut ? "Signing out..." : "Sign out"}
           </button>
         </div>
-
       </aside>
 
       {/* Main Content */}
       <main className="ml-60 flex-1 px-8 py-8">
-
-        {/* Page Header */}
-        <div className="mb-8 flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Projects</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Projects you are supervising. Contact admin to update status.
-            </p>
-          </div>
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">My Projects</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Projects you are supervising. Contact admin to update status.
+          </p>
         </div>
 
-        {/* Projects Table — faculty mode */}
-        {/* supervisorId passed as name for now — will use real uid later */}
-        <ProjectsTable
-          isAdmin={false}
-          supervisorId="Dr. Ayesha Malik"
-        />
+        {/* Only render table when uid is confirmed */}
+        {user.uid ? (
+          <ProjectsTable
+            isAdmin={false}
+            supervisorId={user.uid}
+          />
+        ) : (
+          <div className="flex items-center justify-center py-12">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+          </div>
+        )}
 
       </main>
     </div>

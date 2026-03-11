@@ -1,9 +1,10 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import {
   GraduationCap,
   FolderOpen,
@@ -15,39 +16,16 @@ import {
   BookOpen,
 } from "lucide-react";
 import Link from "next/link";
-import page from "@/app/admin/faculty/[id]/page";
-
-// ─────────────────────────────────────────────
-// Dummy recent projects for this faculty
-// ─────────────────────────────────────────────
-const FACULTY_RECENT_PROJECTS = [
-  {
-    id: "1",
-    title: "AI-Based Smart Attendance System",
-    studentCount: 3,
-    status: "pending",
-  },
-  {
-    id: "3",
-    title: "Blockchain Voting System",
-    studentCount: 3,
-    status: "accepted",
-  },
-  {
-    id: "6",
-    title: "E-Learning Recommendation System",
-    studentCount: 2,
-    status: "accepted",
-  },
-  {
-    id: "9",
-    title: "Online Thesis Repository",
-    studentCount: 3,
-    status: "accepted",
-  },
-];
 
 type ProjectStatus = "pending" | "under_review" | "accepted" | "rejected";
+
+interface Project {
+  id: string;
+  title: string;
+  studentCount: number;
+  status: ProjectStatus;
+  sdg: string;
+}
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<ProjectStatus, string> = {
@@ -63,10 +41,8 @@ function StatusBadge({ status }: { status: string }) {
     rejected: "Rejected",
   };
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status as ProjectStatus]}`}
-    >
-      {labels[status as ProjectStatus]}
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status as ProjectStatus] || "bg-gray-100 text-gray-600"}`}>
+      {labels[status as ProjectStatus] || status}
     </span>
   );
 }
@@ -75,16 +51,44 @@ export default function FacultyDashboard() {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
 
-  // ─────────────────────────────────────────────
-  // Route protection
-  // ─────────────────────────────────────────────
   useEffect(() => {
     if (!loading && !user) router.push("/login");
     if (!loading && user && user.role !== "faculty") {
       router.push("/admin/dashboard");
     }
   }, [user, loading, router]);
+
+  // ─────────────────────────────────────────────
+  // Fetch only this faculty's projects
+  // ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchProjects = async () => {
+      setProjectsLoading(true);
+      try {
+        const q = query(
+          collection(db, "projects"),
+          where("supervisorId", "==", user.uid)
+        );
+        const snap = await getDocs(q);
+        const data = snap.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })) as Project[];
+        setProjects(data);
+      } catch (err) {
+        console.error("Failed to load projects:", err);
+      } finally {
+        setProjectsLoading(false);
+      }
+    };
+
+    fetchProjects();
+  }, [user]);
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -102,38 +106,25 @@ export default function FacultyDashboard() {
 
   if (!user) return null;
 
-  // ─────────────────────────────────────────────
-  // Stats calculated from dummy data
-  // ─────────────────────────────────────────────
-  const totalProjects = FACULTY_RECENT_PROJECTS.length;
-  const accepted = FACULTY_RECENT_PROJECTS.filter(
-    (p) => p.status === "accepted"
-  ).length;
-  const pending = FACULTY_RECENT_PROJECTS.filter(
-    (p) => p.status === "pending"
-  ).length;
-  const underReview = FACULTY_RECENT_PROJECTS.filter(
-    (p) => p.status === "under_review"
-  ).length;
-  const rejected = FACULTY_RECENT_PROJECTS.filter(
-    (p) => p.status === "rejected"
-  ).length;
+  // Stats
+  const totalProjects = projects.length;
+  const accepted = projects.filter((p) => p.status === "accepted").length;
+  const pending = projects.filter((p) => p.status === "pending").length;
+  const underReview = projects.filter((p) => p.status === "under_review").length;
+  const rejected = projects.filter((p) => p.status === "rejected").length;
+
+  // Show only 5 most recent
+  const recentProjects = projects.slice(0, 5);
 
   return (
     <div className="flex min-h-screen bg-gray-50">
 
       {/* Sidebar */}
       <aside className="fixed left-0 top-0 flex h-full w-60 flex-col bg-zinc-900 px-4 py-6">
-
-        {/* Brand */}
         <div className="mb-8 flex items-center gap-2 px-2">
           <GraduationCap size={22} className="text-blue-400" />
-          <span className="text-base font-bold text-white">
-            Capstone Portal
-          </span>
+          <span className="text-base font-bold text-white">Capstone Portal</span>
         </div>
-
-        {/* Nav Links */}
         <nav className="flex flex-col gap-1">
           <Link
             href="/faculty/dashboard"
@@ -150,8 +141,6 @@ export default function FacultyDashboard() {
             My Projects
           </Link>
         </nav>
-
-        {/* User + Logout */}
         <div className="mt-auto">
           <div className="mb-3 rounded-lg bg-zinc-800 px-3 py-3">
             <p className="text-sm font-medium text-white">{user.name}</p>
@@ -169,13 +158,12 @@ export default function FacultyDashboard() {
             {loggingOut ? "Signing out..." : "Sign out"}
           </button>
         </div>
-
       </aside>
 
       {/* Main Content */}
       <main className="ml-60 flex-1 px-8 py-8">
 
-        {/* Page Header */}
+        {/* Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="mt-1 text-sm text-gray-500">
@@ -185,47 +173,34 @@ export default function FacultyDashboard() {
 
         {/* Stats Grid */}
         <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-
           <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
             <div className="mb-2 flex items-center gap-2">
               <BookOpen size={16} className="text-blue-500" />
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                Total
-              </p>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Total</p>
             </div>
             <p className="text-2xl font-bold text-gray-900">{totalProjects}</p>
           </div>
-
           <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
             <div className="mb-2 flex items-center gap-2">
               <CheckCircle size={16} className="text-green-500" />
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                Accepted
-              </p>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Accepted</p>
             </div>
             <p className="text-2xl font-bold text-gray-900">{accepted}</p>
           </div>
-
           <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
             <div className="mb-2 flex items-center gap-2">
               <Clock size={16} className="text-yellow-500" />
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                In Review
-              </p>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">In Review</p>
             </div>
             <p className="text-2xl font-bold text-gray-900">{underReview}</p>
           </div>
-
           <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
             <div className="mb-2 flex items-center gap-2">
               <XCircle size={16} className="text-red-500" />
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                Rejected
-              </p>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Rejected</p>
             </div>
             <p className="text-2xl font-bold text-gray-900">{rejected}</p>
           </div>
-
         </div>
 
         {/* Recent Projects Table */}
@@ -242,38 +217,60 @@ export default function FacultyDashboard() {
             </Link>
           </div>
 
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-              <tr>
-                <th className="px-6 py-3 text-left">#</th>
-                <th className="px-6 py-3 text-left">Project Title</th>
-                <th className="px-6 py-3 text-left">Students</th>
-                <th className="px-6 py-3 text-left">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {FACULTY_RECENT_PROJECTS.map((project, index) => (
-                <tr
-                  key={project.id}
-                  className="transition-colors hover:bg-gray-50"
-                >
-                  <td className="px-6 py-3 text-xs text-gray-400">
-                    {index + 1}
-                  </td>
-                  <td className="px-6 py-3 font-medium text-gray-900">
-                    {project.title}
-                  </td>
-                  <td className="px-6 py-3 text-gray-500">
-                    {project.studentCount} students
-                  </td>
-                  <td className="px-6 py-3">
-                    <StatusBadge status={project.status} />
-                  </td>
+          {projectsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+            </div>
+          ) : recentProjects.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-sm text-gray-400">No projects assigned yet</p>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                <tr>
+                  <th className="px-6 py-3 text-left">#</th>
+                  <th className="px-6 py-3 text-left">Project Title</th>
+                  <th className="px-6 py-3 text-left">SDG</th>
+                  <th className="px-6 py-3 text-left">Students</th>
+                  <th className="px-6 py-3 text-left">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {recentProjects.map((project, index) => (
+                  <tr key={project.id} className="transition-colors hover:bg-gray-50">
+                    <td className="px-6 py-3 text-xs text-gray-400">{index + 1}</td>
+                    <td className="px-6 py-3 font-medium text-gray-900">{project.title}</td>
+                    <td className="px-6 py-3">
+                      {project.sdg ? (
+                        <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                          {project.sdg}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-3 text-gray-500">
+                      {project.studentCount} students
+                    </td>
+                    <td className="px-6 py-3">
+                      <StatusBadge status={project.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
+
+        {/* Pending note */}
+        {pending > 0 && (
+          <div className="mt-4 rounded-xl border border-yellow-100 bg-yellow-50 px-5 py-3">
+            <p className="text-sm text-yellow-700">
+              {pending} project{pending > 1 ? "s are" : " is"} pending admin review.
+            </p>
+          </div>
+        )}
 
       </main>
     </div>

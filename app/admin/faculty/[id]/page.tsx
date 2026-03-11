@@ -3,6 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { db } from "@/lib/firebase";
+import {
+  doc,
+  getDoc,
+  collection,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore";
 import {
   GraduationCap,
   FolderOpen,
@@ -30,7 +39,6 @@ interface Faculty {
   department: string;
   designation: string;
   phone: string;
-  projects: FacultyProject[];
 }
 
 interface FacultyProject {
@@ -38,122 +46,14 @@ interface FacultyProject {
   title: string;
   status: string;
   studentCount: number;
+  sdg: string;
 }
 
-// ─────────────────────────────────────────────
-// Dummy Data
-// ─────────────────────────────────────────────
-const DUMMY_FACULTY: Record<string, Faculty> = {
-  FAC001: {
-    id: "FAC001",
-    name: "Dr. Ayesha Malik",
-    email: "ayesha.malik@university.edu",
-    gender: "Female",
-    department: "Software Engineering",
-    designation: "Associate Professor",
-    phone: "03001234567",
-    projects: [
-      {
-        id: "1",
-        title: "AI-Based Smart Attendance System",
-        status: "pending",
-        studentCount: 3,
-      },
-      {
-        id: "3",
-        title: "Blockchain Voting System",
-        status: "accepted",
-        studentCount: 3,
-      },
-      {
-        id: "6",
-        title: "E-Learning Recommendation System",
-        status: "accepted",
-        studentCount: 2,
-      },
-      {
-        id: "9",
-        title: "Online Thesis Repository",
-        status: "accepted",
-        studentCount: 3,
-      },
-    ],
-  },
-  FAC002: {
-    id: "FAC002",
-    name: "Dr. Imran Khalid",
-    email: "imran.khalid@university.edu",
-    gender: "Male",
-    department: "Computer Science",
-    designation: "Assistant Professor",
-    phone: "03011234567",
-    projects: [
-      {
-        id: "2",
-        title: "Food Waste Reduction App",
-        status: "under_review",
-        studentCount: 2,
-      },
-      {
-        id: "5",
-        title: "AI Resume Analyzer",
-        status: "pending",
-        studentCount: 3,
-      },
-      {
-        id: "8",
-        title: "Smart Parking System",
-        status: "pending",
-        studentCount: 2,
-      },
-    ],
-  },
-  FAC003: {
-    id: "FAC003",
-    name: "Dr. Khalid Mehmood",
-    email: "khalid.mehmood@university.edu",
-    gender: "Male",
-    department: "Information Technology",
-    designation: "Professor",
-    phone: "03021234567",
-    projects: [
-      {
-        id: "4",
-        title: "Smart Traffic Management System",
-        status: "rejected",
-        studentCount: 2,
-      },
-      {
-        id: "7",
-        title: "Health Monitoring IoT System",
-        status: "under_review",
-        studentCount: 3,
-      },
-      {
-        id: "10",
-        title: "AI Chatbot for Student Support",
-        status: "pending",
-        studentCount: 2,
-      },
-    ],
-  },
-  FAC004: {
-    id: "FAC004",
-    name: "Dr. Sana Javed",
-    email: "sana.javed@university.edu",
-    gender: "Female",
-    department: "Software Engineering",
-    designation: "Lecturer",
-    phone: "03031234567",
-    projects: [],
-  },
-};
+type ProjectStatus = "pending" | "under_review" | "accepted" | "rejected";
 
 // ─────────────────────────────────────────────
 // Status Badge
 // ─────────────────────────────────────────────
-type ProjectStatus = "pending" | "under_review" | "accepted" | "rejected";
-
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<ProjectStatus, string> = {
     pending: "bg-gray-100 text-gray-600",
@@ -169,9 +69,9 @@ function StatusBadge({ status }: { status: string }) {
   };
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status as ProjectStatus]}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status as ProjectStatus] || "bg-gray-100 text-gray-600"}`}
     >
-      {labels[status as ProjectStatus]}
+      {labels[status as ProjectStatus] || status}
     </span>
   );
 }
@@ -179,21 +79,35 @@ function StatusBadge({ status }: { status: string }) {
 // ─────────────────────────────────────────────
 // Avatar
 // ─────────────────────────────────────────────
-function Avatar({ name, size = "lg" }: { name: string; size?: "sm" | "lg" }) {
+function Avatar({ name }: { name: string }) {
   const initials = name
     .split(" ")
     .filter((w) => w.length > 0)
     .slice(0, 2)
     .map((w) => w[0].toUpperCase())
     .join("");
-
   return (
-    <div
-      className={`flex shrink-0 items-center justify-center rounded-full bg-blue-600 font-semibold text-white
-        ${size === "lg" ? "h-16 w-16 text-xl" : "h-8 w-8 text-xs"}`}
-    >
+    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xl font-semibold text-white">
       {initials}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Designation Badge
+// ─────────────────────────────────────────────
+function DesignationBadge({ designation }: { designation: string }) {
+  const colorMap: Record<string, string> = {
+    "Professor": "bg-purple-50 text-purple-700",
+    "Associate Professor": "bg-blue-50 text-blue-700",
+    "Assistant Professor": "bg-cyan-50 text-cyan-700",
+    "Lecturer": "bg-green-50 text-green-700",
+  };
+  const style = colorMap[designation] || "bg-gray-100 text-gray-700";
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${style}`}>
+      {designation}
+    </span>
   );
 }
 
@@ -205,9 +119,11 @@ export default function FacultyDetailPage() {
   const router = useRouter();
   const params = useParams();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [faculty, setFaculty] = useState<Faculty | null>(null);
+  const [projects, setProjects] = useState<FacultyProject[]>([]);
+  const [pageLoading, setPageLoading] = useState(true);
 
   const facultyId = params.id as string;
-  const faculty = DUMMY_FACULTY[facultyId];
 
   // ─────────────────────────────────────────────
   // Route protection
@@ -219,13 +135,53 @@ export default function FacultyDetailPage() {
     }
   }, [user, loading, router]);
 
+  // ─────────────────────────────────────────────
+  // Fetch faculty + their projects from Firestore
+  // ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!facultyId) return;
+
+    const fetchData = async () => {
+      setPageLoading(true);
+      try {
+        // Fetch faculty profile
+        const facultyDoc = await getDoc(doc(db, "users", facultyId));
+        if (facultyDoc.exists()) {
+          setFaculty({ id: facultyDoc.id, ...facultyDoc.data() } as Faculty);
+        }
+
+        // Fetch their projects
+        const projectsQuery = query(
+          collection(db, "projects"),
+          where("supervisorId", "==", facultyId)
+        );
+        const projectsSnap = await getDocs(projectsQuery);
+        const projectsData = projectsSnap.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })) as FacultyProject[];
+        setProjects(projectsData);
+
+      } catch (err) {
+        console.error("Failed to load faculty details:", err);
+      } finally {
+        setPageLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [facultyId]);
+
   const handleLogout = async () => {
     setLoggingOut(true);
     await logout();
     router.push("/login");
   };
 
-  if (loading) {
+  // ─────────────────────────────────────────────
+  // Loading states
+  // ─────────────────────────────────────────────
+  if (loading || pageLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
@@ -240,9 +196,7 @@ export default function FacultyDetailPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
-          <p className="text-lg font-semibold text-gray-900">
-            Faculty not found
-          </p>
+          <p className="text-lg font-semibold text-gray-900">Faculty not found</p>
           <Link
             href="/admin/faculty"
             className="mt-3 inline-block text-sm text-blue-600 hover:underline"
@@ -254,6 +208,14 @@ export default function FacultyDetailPage() {
     );
   }
 
+  // ─────────────────────────────────────────────
+  // Stats
+  // ─────────────────────────────────────────────
+  const accepted = projects.filter((p) => p.status === "accepted").length;
+  const pending = projects.filter((p) => p.status === "pending").length;
+  const underReview = projects.filter((p) => p.status === "under_review").length;
+  const rejected = projects.filter((p) => p.status === "rejected").length;
+
   return (
     <div className="flex min-h-screen bg-gray-50">
 
@@ -261,9 +223,7 @@ export default function FacultyDetailPage() {
       <aside className="fixed left-0 top-0 flex h-full w-60 flex-col bg-zinc-900 px-4 py-6">
         <div className="mb-8 flex items-center gap-2 px-2">
           <GraduationCap size={22} className="text-blue-400" />
-          <span className="text-base font-bold text-white">
-            Capstone Portal
-          </span>
+          <span className="text-base font-bold text-white">Capstone Portal</span>
         </div>
         <nav className="flex flex-col gap-1">
           <Link
@@ -310,7 +270,7 @@ export default function FacultyDetailPage() {
       {/* Main Content */}
       <main className="ml-60 flex-1 px-8 py-8">
 
-        {/* Back Button */}
+        {/* Back */}
         <Link
           href="/admin/faculty"
           className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
@@ -321,111 +281,98 @@ export default function FacultyDetailPage() {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
 
-          {/* Left — Profile Card */}
+          {/* ── Left: Profile Card ── */}
           <div className="lg:col-span-1">
             <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
 
               {/* Avatar + Name */}
               <div className="mb-6 flex flex-col items-center text-center">
-                <Avatar name={faculty.name} size="lg" />
+                <Avatar name={faculty.name} />
                 <h2 className="mt-4 text-lg font-bold text-gray-900">
                   {faculty.name}
                 </h2>
-                <p className="text-sm text-gray-500">
-                  {faculty.designation}
-                </p>
+                <div className="mt-1.5">
+                  <DesignationBadge designation={faculty.designation} />
+                </div>
               </div>
 
-              {/* Divider */}
               <div className="mb-5 h-px bg-gray-100" />
 
-              {/* Info rows */}
+              {/* Info Rows */}
               <div className="flex flex-col gap-4">
 
                 <div className="flex items-start gap-3">
                   <Mail size={16} className="mt-0.5 shrink-0 text-gray-400" />
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                      Email
-                    </p>
-                    <p className="text-sm text-gray-700">{faculty.email}</p>
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Email</p>
+                    <p className="text-sm text-gray-700 break-all">{faculty.email}</p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3">
                   <Phone size={16} className="mt-0.5 shrink-0 text-gray-400" />
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                      Phone
-                    </p>
-                    <p className="text-sm text-gray-700">{faculty.phone}</p>
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Phone</p>
+                    <p className="text-sm text-gray-700">{faculty.phone || "—"}</p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3">
-                  <Building2
-                    size={16}
-                    className="mt-0.5 shrink-0 text-gray-400"
-                  />
+                  <Building2 size={16} className="mt-0.5 shrink-0 text-gray-400" />
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                      Department
-                    </p>
-                    <p className="text-sm text-gray-700">
-                      {faculty.department}
-                    </p>
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Department</p>
+                    <p className="text-sm text-gray-700">{faculty.department || "—"}</p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3">
-                  <BadgeCheck
-                    size={16}
-                    className="mt-0.5 shrink-0 text-gray-400"
-                  />
+                  <BadgeCheck size={16} className="mt-0.5 shrink-0 text-gray-400" />
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                      Designation
-                    </p>
-                    <p className="text-sm text-gray-700">
-                      {faculty.designation}
-                    </p>
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Designation</p>
+                    <p className="text-sm text-gray-700">{faculty.designation || "—"}</p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3">
                   {faculty.gender === "Female" ? (
-                    <Venus
-                      size={16}
-                      className="mt-0.5 shrink-0 text-pink-400"
-                    />
+                    <Venus size={16} className="mt-0.5 shrink-0 text-pink-400" />
                   ) : (
-                    <Mars
-                      size={16}
-                      className="mt-0.5 shrink-0 text-blue-400"
-                    />
+                    <Mars size={16} className="mt-0.5 shrink-0 text-blue-400" />
                   )}
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                      Gender
-                    </p>
-                    <p className="text-sm text-gray-700">{faculty.gender}</p>
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Gender</p>
+                    <p className="text-sm text-gray-700">{faculty.gender || "—"}</p>
                   </div>
                 </div>
 
               </div>
 
-              {/* Divider */}
               <div className="my-5 h-px bg-gray-100" />
 
-              {/* Edit Button */}
-              <button className="w-full rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50">
-                Edit Profile
-              </button>
+              {/* Mini Stats */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-gray-50 px-3 py-2.5 text-center">
+                  <p className="text-lg font-bold text-gray-900">{projects.length}</p>
+                  <p className="text-xs text-gray-500">Total</p>
+                </div>
+                <div className="rounded-lg bg-green-50 px-3 py-2.5 text-center">
+                  <p className="text-lg font-bold text-green-700">{accepted}</p>
+                  <p className="text-xs text-green-600">Accepted</p>
+                </div>
+                <div className="rounded-lg bg-yellow-50 px-3 py-2.5 text-center">
+                  <p className="text-lg font-bold text-yellow-700">{underReview}</p>
+                  <p className="text-xs text-yellow-600">In Review</p>
+                </div>
+                <div className="rounded-lg bg-gray-50 px-3 py-2.5 text-center">
+                  <p className="text-lg font-bold text-gray-700">{pending}</p>
+                  <p className="text-xs text-gray-500">Pending</p>
+                </div>
+              </div>
 
             </div>
           </div>
 
-          {/* Right — Projects */}
+          {/* ── Right: Projects ── */}
           <div className="lg:col-span-2">
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
 
@@ -435,32 +382,31 @@ export default function FacultyDetailPage() {
                   Supervised Projects
                 </h2>
                 <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-                  {faculty.projects.length} projects
+                  {projects.length} projects
                 </span>
               </div>
 
-              {/* Empty state */}
-              {faculty.projects.length === 0 && (
+              {/* Empty */}
+              {projects.length === 0 && (
                 <div className="py-12 text-center">
-                  <p className="text-sm text-gray-400">
-                    No projects assigned yet
-                  </p>
+                  <p className="text-sm text-gray-400">No projects assigned yet</p>
                 </div>
               )}
 
-              {/* Projects table */}
-              {faculty.projects.length > 0 && (
+              {/* Projects Table */}
+              {projects.length > 0 && (
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                     <tr>
                       <th className="px-6 py-3 text-left">#</th>
                       <th className="px-6 py-3 text-left">Project Title</th>
+                      <th className="px-6 py-3 text-left">SDG</th>
                       <th className="px-6 py-3 text-left">Students</th>
                       <th className="px-6 py-3 text-left">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {faculty.projects.map((project, index) => (
+                    {projects.map((project, index) => (
                       <tr
                         key={project.id}
                         className="transition-colors hover:bg-gray-50"
@@ -470,6 +416,15 @@ export default function FacultyDetailPage() {
                         </td>
                         <td className="px-6 py-3 font-medium text-gray-900">
                           {project.title}
+                        </td>
+                        <td className="px-6 py-3">
+                          {project.sdg ? (
+                            <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                              {project.sdg}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
                         </td>
                         <td className="px-6 py-3 text-gray-500">
                           {project.studentCount} students
@@ -484,8 +439,17 @@ export default function FacultyDetailPage() {
               )}
 
             </div>
-          </div>
 
+            {/* Rejected projects note */}
+            {rejected > 0 && (
+              <div className="mt-4 rounded-xl border border-red-100 bg-red-50 px-5 py-3">
+                <p className="text-sm text-red-600">
+                  {rejected} project{rejected > 1 ? "s" : ""} rejected — faculty may need to revise and resubmit.
+                </p>
+              </div>
+            )}
+
+          </div>
         </div>
       </main>
     </div>

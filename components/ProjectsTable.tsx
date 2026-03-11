@@ -1,7 +1,16 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Search } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Search, Trash2 } from "lucide-react";
+import {
+  collection,
+  getDocs,
+  doc,
+  updateDoc,
+  deleteDoc,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import toast from "react-hot-toast";
 
 // ─────────────────────────────────────────────
 // Types
@@ -11,10 +20,10 @@ type ProjectStatus = "pending" | "under_review" | "accepted" | "rejected";
 interface Project {
   id: string;
   title: string;
-  description: string;
+  supervisor: string;
+  supervisorId: string;
   students: string[];
   studentCount: number;
-  supervisor: string;
   coSupervisor: string | null;
   industrialPartner: string;
   sdg: string;
@@ -22,204 +31,145 @@ interface Project {
 }
 
 // ─────────────────────────────────────────────
-// Dummy Data
-// ─────────────────────────────────────────────
-const DUMMY_PROJECTS: Project[] = [
-  {
-    id: "1",
-    title: "AI-Based Smart Attendance System",
-    description: "Facial recognition based attendance system for universities",
-    students: ["Ali Raza", "Ahmed Khan", "Sara Noor"],
-    studentCount: 3,
-    supervisor: "Dr. Ayesha Malik",
-    coSupervisor: "Dr. Hamza Tariq",
-    industrialPartner: "TechSoft Solutions",
-    sdg: "SDG 4 - Quality Education",
-    status: "pending",
-  },
-  {
-    id: "2",
-    title: "Food Waste Reduction App",
-    description: "Mobile app to reduce food waste by connecting donors and NGOs",
-    students: ["Fatima Zahra", "Bilal Hussain"],
-    studentCount: 2,
-    supervisor: "Dr. Imran Khalid",
-    coSupervisor: null,
-    industrialPartner: "GreenTech Pvt Ltd",
-    sdg: "SDG 12 - Responsible Consumption",
-    status: "under_review",
-  },
-  {
-    id: "3",
-    title: "Blockchain Voting System",
-    description: "Secure digital voting system using blockchain technology",
-    students: ["Usman Tariq", "Sana Ahmed", "Hira Shah"],
-    studentCount: 3,
-    supervisor: "Dr. Ayesha Malik",
-    coSupervisor: "Dr. Saad Khan",
-    industrialPartner: "SecureVote Labs",
-    sdg: "SDG 16 - Peace & Justice",
-    status: "accepted",
-  },
-  {
-    id: "4",
-    title: "Smart Traffic Management System",
-    description: "AI-based traffic monitoring and signal optimization",
-    students: ["Ahmed Ali", "Zainab Noor"],
-    studentCount: 2,
-    supervisor: "Dr. Khalid Mehmood",
-    coSupervisor: null,
-    industrialPartner: "SmartCity Solutions",
-    sdg: "SDG 11 - Sustainable Cities",
-    status: "rejected",
-  },
-  {
-    id: "5",
-    title: "AI Resume Analyzer",
-    description: "System that analyzes resumes using NLP",
-    students: ["Maryam Tariq", "Hassan Raza", "Daniyal Khan"],
-    studentCount: 3,
-    supervisor: "Dr. Imran Khalid",
-    coSupervisor: "Dr. Sana Javed",
-    industrialPartner: "HR Tech Labs",
-    sdg: "SDG 8 - Decent Work",
-    status: "pending",
-  },
-  {
-    id: "6",
-    title: "E-Learning Recommendation System",
-    description: "Personalized course recommendation using machine learning",
-    students: ["Areeba Khan", "Noor Fatima"],
-    studentCount: 2,
-    supervisor: "Dr. Ayesha Malik",
-    coSupervisor: null,
-    industrialPartner: "EduSmart",
-    sdg: "SDG 4 - Quality Education",
-    status: "accepted",
-  },
-  {
-    id: "7",
-    title: "Health Monitoring IoT System",
-    description: "Wearable device to monitor heart rate and body temperature",
-    students: ["Hamza Ali", "Fahad Shah", "Ayesha Tariq"],
-    studentCount: 3,
-    supervisor: "Dr. Khalid Mehmood",
-    coSupervisor: "Dr. Saad Khan",
-    industrialPartner: "MedTech Solutions",
-    sdg: "SDG 3 - Good Health",
-    status: "under_review",
-  },
-  {
-    id: "8",
-    title: "Smart Parking System",
-    description: "IoT based parking availability detection for smart cities",
-    students: ["Abdullah Khan", "Usama Ali"],
-    studentCount: 2,
-    supervisor: "Dr. Imran Khalid",
-    coSupervisor: null,
-    industrialPartner: "ParkTech Systems",
-    sdg: "SDG 11 - Sustainable Cities",
-    status: "pending",
-  },
-  {
-    id: "9",
-    title: "Online Thesis Repository",
-    description: "Digital repository for storing and searching university theses",
-    students: ["Sana Raza", "Ahmed Bilal", "Hiba Noor"],
-    studentCount: 3,
-    supervisor: "Dr. Ayesha Malik",
-    coSupervisor: "Dr. Sana Javed",
-    industrialPartner: "UniTech",
-    sdg: "SDG 9 - Industry Innovation",
-    status: "accepted",
-  },
-  {
-    id: "10",
-    title: "AI Chatbot for Student Support",
-    description: "AI chatbot to answer student queries about courses",
-    students: ["Zoya Khan", "Daniyal Raza"],
-    studentCount: 2,
-    supervisor: "Dr. Khalid Mehmood",
-    coSupervisor: null,
-    industrialPartner: "CampusTech",
-    sdg: "SDG 4 - Quality Education",
-    status: "pending",
-  },
-];
-
-// ─────────────────────────────────────────────
 // Status Badge
 // ─────────────────────────────────────────────
 function StatusBadge({ status }: { status: ProjectStatus }) {
   const styles: Record<ProjectStatus, string> = {
-    pending: "bg-gray-100 text-gray-600",
+    pending: "bg-gray-100 text-gray-700",
     under_review: "bg-yellow-100 text-yellow-700",
     accepted: "bg-green-100 text-green-700",
     rejected: "bg-red-100 text-red-700",
   };
-
   const labels: Record<ProjectStatus, string> = {
     pending: "Pending",
     under_review: "Under Review",
     accepted: "Accepted",
     rejected: "Rejected",
   };
-
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status]}`}
-    >
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status]}`}>
       {labels[status]}
     </span>
   );
 }
 
 // ─────────────────────────────────────────────
-// Props
+// Status Select Colors
 // ─────────────────────────────────────────────
-interface ProjectsTableProps {
-  isAdmin?: boolean;
-  supervisorId?: string;
+function statusSelectClass(status: ProjectStatus): string {
+  const map: Record<ProjectStatus, string> = {
+    pending: "border-gray-200 bg-gray-100 text-gray-700",
+    under_review: "border-yellow-200 bg-yellow-50 text-yellow-700",
+    accepted: "border-green-200 bg-green-50 text-green-700",
+    rejected: "border-red-200 bg-red-50 text-red-700",
+  };
+  return map[status] || "border-gray-200 bg-gray-100 text-gray-700";
 }
 
 // ─────────────────────────────────────────────
-// Main Component
+// Props
 // ─────────────────────────────────────────────
-export default function ProjectsTable({
-  isAdmin = false,
-  supervisorId,
-}: ProjectsTableProps) {
+interface ProjectsTableProps {
+  isAdmin: boolean;
+  supervisorId?: string;
+}
+
+export default function ProjectsTable({ isAdmin, supervisorId }: ProjectsTableProps) {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
-  // Filter by supervisor if faculty view
-  const roleFiltered = useMemo(() => {
-    if (isAdmin) return DUMMY_PROJECTS;
-    return DUMMY_PROJECTS.filter((p) => p.supervisor === supervisorId);
-  }, [isAdmin, supervisorId]);
+  // ─────────────────────────────────────────────
+  // Fetch from Firestore
+  // ─────────────────────────────────────────────
+const fetchProjects = async () => {
+  setLoading(true);
+  try {
+    const snap = await getDocs(collection(db, "projects"));
+    const data = snap.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+    })) as Project[];
+    
+    // DEBUG — remove after fixing
+    console.log("All projects supervisorIds:", data.map(p => ({ title: p.title, supervisorId: p.supervisorId })));
+    console.log("Current user supervisorId prop:", supervisorId);
+    
+    setProjects(data);
+  } catch {
+    toast.error("Failed to load projects");
+  } finally {
+    setLoading(false);
+  }
+};
 
-  // Filter by search
-  const filtered = useMemo(() => {
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  // ─────────────────────────────────────────────
+  // Filter — uses supervisorId (UID) not name
+  // ─────────────────────────────────────────────
+  const visibleProjects = useMemo(() => {
+    let list = projects;
+    if (!isAdmin && supervisorId) {
+      list = list.filter((p) => p.supervisorId === supervisorId); // ← FIXED
+    }
     const term = search.toLowerCase().trim();
-    if (!term) return roleFiltered;
-    return roleFiltered.filter(
+    if (!term) return list;
+    return list.filter(
       (p) =>
-        p.title.toLowerCase().includes(term) ||
-        p.supervisor.toLowerCase().includes(term) ||
-        p.sdg.toLowerCase().includes(term) ||
-        p.students.some((s) => s.toLowerCase().includes(term))
+        p.title?.toLowerCase().includes(term) ||
+        p.supervisor?.toLowerCase().includes(term) ||
+        p.sdg?.toLowerCase().includes(term) ||
+        p.status?.toLowerCase().includes(term)
     );
-  }, [search, roleFiltered]);
+  }, [projects, search, isAdmin, supervisorId]);
+
+  // ─────────────────────────────────────────────
+  // Update Status
+  // ─────────────────────────────────────────────
+  const handleStatusChange = async (projectId: string, newStatus: ProjectStatus) => {
+    try {
+      await updateDoc(doc(db, "projects", projectId), { status: newStatus });
+      setProjects((prev) =>
+        prev.map((p) => (p.id === projectId ? { ...p, status: newStatus } : p))
+      );
+      toast.success("Status updated");
+    } catch {
+      toast.error("Failed to update status");
+    }
+  };
+
+  // ─────────────────────────────────────────────
+  // Delete
+  // ─────────────────────────────────────────────
+  const handleDelete = async (projectId: string) => {
+    if (!confirm("Are you sure you want to delete this project?")) return;
+    try {
+      await deleteDoc(doc(db, "projects", projectId));
+      setProjects((prev) => prev.filter((p) => p.id !== projectId));
+      toast.success("Project deleted");
+    } catch {
+      toast.error("Failed to delete project");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">
 
-      {/* Header */}
+      {/* Search + Count */}
       <div className="mb-4 flex items-center justify-between gap-4">
         <div className="relative w-full max-w-sm">
-          <Search
-            size={15}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-          />
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             placeholder="Search projects..."
@@ -229,120 +179,109 @@ export default function ProjectsTable({
           />
         </div>
         <span className="shrink-0 text-xs text-gray-400">
-          {filtered.length} of {roleFiltered.length} projects
+          {visibleProjects.length} of {projects.length} projects
         </span>
       </div>
 
-      {/* Empty state */}
-      {filtered.length === 0 && (
+      {/* Empty */}
+      {visibleProjects.length === 0 && !loading && (
         <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 py-12 text-center">
           <p className="text-sm text-gray-400">No projects found</p>
         </div>
       )}
 
       {/* Table */}
-      {filtered.length > 0 && (
+      {visibleProjects.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-gray-200">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
                 <th className="px-4 py-3 text-left">#</th>
-                <th className="px-4 py-3 text-left">Project Title</th>
-                <th className="px-4 py-3 text-left">Students</th>
+                <th className="px-4 py-3 text-left">Title</th>
                 <th className="px-4 py-3 text-left">Supervisor</th>
-                <th className="px-4 py-3 text-left">Co-Supervisor</th>
+                <th className="px-4 py-3 text-left">Students</th>
                 <th className="px-4 py-3 text-left">SDG</th>
                 <th className="px-4 py-3 text-left">Status</th>
-                {isAdmin && (
-                  <th className="px-4 py-3 text-left">Actions</th>
-                )}
+                {isAdmin && <th className="px-4 py-3 text-left">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {filtered.map((project, index) => (
-                <tr
-                  key={project.id}
-                  className="transition-colors hover:bg-gray-50"
-                >
-                  {/* Number */}
+              {visibleProjects.map((project, index) => (
+                <tr key={project.id} className="transition-colors hover:bg-gray-50">
+
+                  {/* # */}
                   <td className="px-4 py-3 text-xs text-gray-400">
                     {index + 1}
                   </td>
 
                   {/* Title */}
-                  <td className="px-4 py-3 max-w-[200px]">
-                    <p className="font-medium text-gray-900">{project.title}</p>
-                    <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">
-                      {project.description}
-                    </p>
+                  <td className="px-4 py-3 font-medium text-gray-900 max-w-xs">
+                    {project.title || "—"}
+                  </td>
+
+                  {/* Supervisor */}
+                  <td className="px-4 py-3 text-gray-600">
+                    {project.supervisor || "—"}
                   </td>
 
                   {/* Students */}
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
-                      {project.students.map((student, i) => (
+                      {project.students?.map((s, i) => (
                         <span
                           key={i}
-                          className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700"
+                          className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700"
                         >
-                          {student}
+                          {s}
                         </span>
                       ))}
                     </div>
-                    <span className="mt-1 block text-xs text-gray-400">
-                      {project.studentCount} students
-                    </span>
-                  </td>
-
-                  {/* Supervisor */}
-                  <td className="px-4 py-3 text-gray-700">
-                    {project.supervisor}
-                  </td>
-
-                  {/* Co-Supervisor */}
-                  <td className="px-4 py-3">
-                    {project.coSupervisor ? (
-                      <span className="text-gray-700">
-                        {project.coSupervisor}
-                      </span>
-                    ) : (
-                      <span className="text-xs italic text-gray-400">
-                        None
-                      </span>
-                    )}
                   </td>
 
                   {/* SDG */}
                   <td className="px-4 py-3">
-                    <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700">
-                      {project.sdg}
-                    </span>
+                    {project.sdg ? (
+                      <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                        {project.sdg}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
                   </td>
 
                   {/* Status */}
                   <td className="px-4 py-3">
-                    <StatusBadge status={project.status} />
+                    {isAdmin ? (
+                      <select
+                        value={project.status}
+                        onChange={(e) =>
+                          handleStatusChange(project.id, e.target.value as ProjectStatus)
+                        }
+                        className={`rounded-lg border px-2 py-1 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-400 ${statusSelectClass(project.status)}`}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="under_review">Under Review</option>
+                        <option value="accepted">Accepted</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                    ) : (
+                      <StatusBadge status={project.status} />
+                    )}
                   </td>
 
-                  {/* Admin Actions */}
+                  {/* Actions */}
                   {isAdmin && (
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <select
-                          defaultValue={project.status}
-                          className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="under_review">Under Review</option>
-                          <option value="accepted">Accepted</option>
-                          <option value="rejected">Rejected</option>
-                        </select>
-                        <button className="rounded-lg bg-red-50 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors">
-                          Delete
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => handleDelete(project.id)}
+                        className="flex items-center gap-1 rounded-lg bg-red-50 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+                      >
+                        <Trash2 size={12} />
+                        Delete
+                      </button>
                     </td>
                   )}
+
                 </tr>
               ))}
             </tbody>

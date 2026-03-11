@@ -16,9 +16,6 @@ export async function loginWithEmail(
   password: string
 ): Promise<UserProfile> {
   const credential = await signInWithEmailAndPassword(auth, email, password);
-  
-  console.log("Auth UID:", credential.user.uid); // DEBUG
-  
   const profile = await getUserProfile(credential.user.uid);
   if (!profile) throw new Error("Profile not found. Contact admin.");
   return profile;
@@ -27,8 +24,6 @@ export async function loginWithEmail(
 export async function loginWithGoogle(): Promise<UserProfile> {
   const credential = await signInWithPopup(auth, googleProvider);
   const firebaseUser = credential.user;
-
-  console.log("Google Auth UID:", firebaseUser.uid); // DEBUG
 
   let profile = await getUserProfile(firebaseUser.uid);
   if (!profile) {
@@ -52,11 +47,10 @@ export async function logout(): Promise<void> {
 export async function getUserProfile(
   uid: string
 ): Promise<UserProfile | null> {
-  console.log("Fetching profile for UID:", uid); // DEBUG
   const snapshot = await getDoc(doc(db, "users", uid));
-  console.log("Document exists:", snapshot.exists()); // DEBUG
   if (!snapshot.exists()) return null;
-  return { uid, ...snapshot.data() } as UserProfile;
+  // uid at the END so Auth UID always overrides any stored value
+  return { ...snapshot.data(), uid } as UserProfile;
 }
 
 export async function createUserProfile(
