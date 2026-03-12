@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import FacultyTable from "@/components/FacultyTable";
+import FacultyExcelUpload from "@/components/FacultyExcelUpload";
 import {
   GraduationCap, FolderOpen, Users, LogOut,
-  LayoutDashboard, UserPlus, X,
+  LayoutDashboard, UserPlus, X, FileSpreadsheet,
 } from "lucide-react";
 import Link from "next/link";
 import { createUserWithEmailAndPassword } from "firebase/auth";
@@ -32,11 +33,12 @@ const EMPTY_FORM: FacultyForm = {
 export default function AdminFacultyPage() {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
-  const [loggingOut, setLoggingOut] = useState(false);
-  const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState<FacultyForm>(EMPTY_FORM);
-  const [submitting, setSubmitting] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [loggingOut, setLoggingOut]         = useState(false);
+  const [showModal, setShowModal]           = useState(false);
+  const [showExcelUpload, setShowExcelUpload] = useState(false);
+  const [form, setForm]                     = useState<FacultyForm>(EMPTY_FORM);
+  const [submitting, setSubmitting]         = useState(false);
+  const [refreshKey, setRefreshKey]         = useState(0);
 
   // ─── Route protection ───────────────────────
   useEffect(() => {
@@ -71,18 +73,18 @@ export default function AdminFacultyPage() {
     setSubmitting(true);
     try {
       const currentAdmin = auth.currentUser;
-      const credential = await createUserWithEmailAndPassword(auth, form.email, form.password);
-      const newUid = credential.user.uid;
+      const credential   = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      const newUid       = credential.user.uid;
 
       await setDoc(doc(db, "users", newUid), {
-        name: form.name,
-        email: form.email,
-        role: "faculty",
-        gender: form.gender,
-        department: form.department,
-        designation: form.designation,
-        phone: form.phone,
-        joinedAt: Timestamp.now(),
+        name:            form.name,
+        email:           form.email,
+        role:            "faculty",
+        gender:          form.gender,
+        department:      form.department,
+        designation:     form.designation,
+        phone:           form.phone,
+        joinedAt:        Timestamp.now(),
         profileComplete: true,
       });
 
@@ -144,7 +146,9 @@ export default function AdminFacultyPage() {
           <div className="mb-3 rounded-lg bg-zinc-800 px-3 py-3">
             <p className="text-sm font-medium text-white">{user.name}</p>
             <p className="text-xs text-zinc-400">{user.email}</p>
-            <span className="mt-1.5 inline-block rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white">Admin</span>
+            <span className="mt-1.5 inline-block rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white">
+              Admin
+            </span>
           </div>
           <button onClick={handleLogout} disabled={loggingOut}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors disabled:opacity-50">
@@ -158,24 +162,52 @@ export default function AdminFacultyPage() {
         <div className="mb-8 flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Faculty</h1>
-            <p className="mt-1 text-sm text-gray-500">Manage faculty members — view details, edit info, or add new members.</p>
+            <p className="mt-1 text-sm text-gray-500">
+              Manage faculty members — upload Excel or add manually.
+            </p>
           </div>
-          <button onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition-colors">
-            <UserPlus size={15} />Add Faculty
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Excel Upload Button */}
+            <button
+              onClick={() => setShowExcelUpload(true)}
+              className="flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-700 transition-colors"
+            >
+              <FileSpreadsheet size={15} />
+              Upload Excel
+            </button>
+            {/* Manual Add Button */}
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition-colors"
+            >
+              <UserPlus size={15} />
+              Add Faculty
+            </button>
+          </div>
         </div>
+
         <FacultyTable key={refreshKey} />
       </main>
 
-      {/* Add Faculty Modal */}
+      {/* ── Excel Upload Modal ── */}
+      {showExcelUpload && (
+        <FacultyExcelUpload
+          onImportComplete={() => setRefreshKey((prev) => prev + 1)}
+          onClose={() => setShowExcelUpload(false)}
+        />
+      )}
+
+      {/* ── Manual Add Faculty Modal ── */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-md rounded-2xl bg-white shadow-xl max-h-[90vh] overflow-y-auto">
+
             <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
               <h2 className="text-base font-semibold text-gray-900">Add New Faculty</h2>
-              <button onClick={() => { setShowModal(false); setForm(EMPTY_FORM); }}
-                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+              <button
+                onClick={() => { setShowModal(false); setForm(EMPTY_FORM); }}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+              >
                 <X size={18} />
               </button>
             </div>
@@ -184,19 +216,22 @@ export default function AdminFacultyPage() {
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-800">Full Name</label>
-                <input name="name" value={form.name} onChange={handleChange} placeholder="Dr. John Smith"
+                <input name="name" value={form.name} onChange={handleChange}
+                  placeholder="Dr. John Smith"
                   className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400" />
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-800">Email Address</label>
-                <input name="email" type="email" value={form.email} onChange={handleChange} placeholder="john@university.edu"
+                <input name="email" type="email" value={form.email} onChange={handleChange}
+                  placeholder="john@university.edu"
                   className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400" />
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-800">Password</label>
-                <input name="password" type="password" value={form.password} onChange={handleChange} placeholder="Min. 6 characters"
+                <input name="password" type="password" value={form.password} onChange={handleChange}
+                  placeholder="Min. 6 characters"
                   className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400" />
               </div>
 
@@ -211,7 +246,8 @@ export default function AdminFacultyPage() {
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-800">Department</label>
-                <input name="department" value={form.department} onChange={handleChange} placeholder="Software Engineering"
+                <input name="department" value={form.department} onChange={handleChange}
+                  placeholder="Software Engineering"
                   className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400" />
               </div>
 
@@ -229,12 +265,14 @@ export default function AdminFacultyPage() {
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-800">Phone</label>
-                <input name="phone" value={form.phone} onChange={handleChange} placeholder="03001234567"
+                <input name="phone" value={form.phone} onChange={handleChange}
+                  placeholder="03001234567"
                   className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400" />
               </div>
 
               <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => { setShowModal(false); setForm(EMPTY_FORM); }}
+                <button type="button"
+                  onClick={() => { setShowModal(false); setForm(EMPTY_FORM); }}
                   className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                   Cancel
                 </button>
@@ -253,6 +291,7 @@ export default function AdminFacultyPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
