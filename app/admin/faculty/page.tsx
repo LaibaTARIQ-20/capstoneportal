@@ -1,51 +1,95 @@
+/* eslint-disable @typescript-eslint/no-unused-expressions */
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import FacultyTable from "@/components/FacultyTable";
-import FacultyExcelUpload from "@/components/FacultyExcelUpload";
 import {
   GraduationCap, FolderOpen, Users, LogOut,
-  LayoutDashboard, UserPlus, X, FileSpreadsheet,
+  LayoutDashboard, UserPlus, Pencil, Trash2, Search,
 } from "lucide-react";
 import Link from "next/link";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, Timestamp } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import {
+  doc, deleteDoc, collection, getDocs,
+  query, where, writeBatch,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import toast from "react-hot-toast";
 
-interface FacultyForm {
+interface Faculty {
+  id: string;
   name: string;
   email: string;
-  password: string;
-  gender: "Male" | "Female";
+  gender: string;
   department: string;
   designation: string;
   phone: string;
 }
 
-const EMPTY_FORM: FacultyForm = {
-  name: "", email: "", password: "",
-  gender: "Male", department: "", designation: "", phone: "",
-};
+function DesignationBadge({ designation }: { designation: string }) {
+  const map: Record<string, string> = {
+    "Professor":           "bg-purple-100 text-purple-700",
+    "Associate Professor": "bg-blue-100 text-blue-700",
+    "Assistant Professor": "bg-cyan-100 text-cyan-700",
+    "Lecturer":            "bg-green-100 text-green-700",
+  };
+  return (
+    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${map[designation] || "bg-gray-100 text-gray-700"}`}>
+      {designation || "—"}
+    </span>
+  );
+}
 
 export default function AdminFacultyPage() {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
-  const [loggingOut, setLoggingOut]         = useState(false);
-  const [showModal, setShowModal]           = useState(false);
-  const [showExcelUpload, setShowExcelUpload] = useState(false);
-  const [form, setForm]                     = useState<FacultyForm>(EMPTY_FORM);
-  const [submitting, setSubmitting]         = useState(false);
-  const [refreshKey, setRefreshKey]         = useState(0);
 
-  // ─── Route protection ───────────────────────
+  const [facultyList, setFacultyList]   = useState<Faculty[]>([]);
+  const [filtered, setFiltered]         = useState<Faculty[]>([]);
+  const [search, setSearch]             = useState("");
+  const [pageLoading, setPageLoading]   = useState(true);
+  const [loggingOut, setLoggingOut]     = useState(false);
+  const [deletingId, setDeletingId]     = useState<string | null>(null);
+  const [selected, setSelected]         = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   useEffect(() => {
     if (loading) return;
     if (!user) { router.push("/login"); return; }
     if (user.role !== "admin") router.push("/faculty/dashboard");
   }, [user, loading, router]);
+
+  useEffect(() => {
+    if (!user || user.role !== "admin") return;
+    const fetchFaculty = async () => {
+      setPageLoading(true);
+      try {
+        const snap = await getDocs(
+          query(collection(db, "users"), where("role", "==", "faculty"))
+        );
+        const data = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Faculty[];
+        setFacultyList(data);
+        setFiltered(data);
+      } catch {
+        toast.error("Failed to load faculty");
+      } finally {
+        setPageLoading(false);
+      }
+    };
+    fetchFaculty();
+  }, [user]);
+
+  useEffect(() => {
+    const q = search.toLowerCase();
+    setFiltered(
+      facultyList.filter(
+        (f) =>
+          f.name?.toLowerCase().includes(q) ||
+          f.email?.toLowerCase().includes(q) ||
+          f.department?.toLowerCase().includes(q)
+      )
+    );
+  }, [search, facultyList]);
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -53,63 +97,56 @@ export default function AdminFacultyPage() {
     window.location.href = "/login";
   };
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name || !form.email || !form.password || !form.department || !form.designation || !form.phone) {
-      toast.error("Please fill in all fields");
-      return;
-    }
-    if (form.password.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      return;
-    }
-
-    setSubmitting(true);
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    setDeletingId(id);
     try {
-      const currentAdmin = auth.currentUser;
-      const credential   = await createUserWithEmailAndPassword(auth, form.email, form.password);
-      const newUid       = credential.user.uid;
-
-      await setDoc(doc(db, "users", newUid), {
-        name:            form.name,
-        email:           form.email,
-        role:            "faculty",
-        gender:          form.gender,
-        department:      form.department,
-        designation:     form.designation,
-        phone:           form.phone,
-        joinedAt:        Timestamp.now(),
-        profileComplete: true,
-      });
-
-      if (currentAdmin) await auth.updateCurrentUser(currentAdmin);
-
-      toast.success(`${form.name} added successfully`);
-      setForm(EMPTY_FORM);
-      setShowModal(false);
-      setRefreshKey((prev) => prev + 1);
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        if (error.message.includes("email-already-in-use")) {
-          toast.error("This email is already registered");
-        } else {
-          toast.error(error.message);
-        }
-      } else {
-        toast.error("Failed to add faculty");
-      }
+      await deleteDoc(doc(db, "users", id));
+      setFacultyList((prev) => prev.filter((f) => f.id !== id));
+      setSelected((prev) => { const n = new Set(prev); n.delete(id); return n; });
+      toast.success(`${name} deleted`);
+    } catch {
+      toast.error("Failed to delete");
     } finally {
-      setSubmitting(false);
+      setDeletingId(null);
     }
   };
 
-  if (loading) {
+  const handleBulkDelete = async () => {
+    if (selected.size === 0) return;
+    if (!confirm(`Delete ${selected.size} selected faculty member${selected.size > 1 ? "s" : ""}? This cannot be undone.`)) return;
+    setBulkDeleting(true);
+    try {
+      const batch = writeBatch(db);
+      selected.forEach((id) => batch.delete(doc(db, "users", id)));
+      await batch.commit();
+      setFacultyList((prev) => prev.filter((f) => !selected.has(f.id)));
+      setSelected(new Set());
+      toast.success(`${selected.size} faculty member${selected.size > 1 ? "s" : ""} deleted`);
+    } catch {
+      toast.error("Bulk delete failed");
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selected.size === filtered.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filtered.map((f) => f.id)));
+    }
+  };
+
+  if (loading || pageLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
@@ -122,8 +159,7 @@ export default function AdminFacultyPage() {
   return (
     <div className="flex min-h-screen bg-gray-50">
 
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 flex h-full w-60 flex-col bg-zinc-900 px-4 py-6">
+      <aside className="fixed left-0 top-0 flex h-full w-60 flex-col bg-zinc-900 px-4 py-6 z-30">
         <div className="mb-8 flex items-center gap-2 px-2">
           <GraduationCap size={22} className="text-blue-400" />
           <span className="text-base font-bold text-white">Capstone Portal</span>
@@ -144,11 +180,9 @@ export default function AdminFacultyPage() {
         </nav>
         <div className="mt-auto">
           <div className="mb-3 rounded-lg bg-zinc-800 px-3 py-3">
-            <p className="text-sm font-medium text-white">{user.name}</p>
-            <p className="text-xs text-zinc-400">{user.email}</p>
-            <span className="mt-1.5 inline-block rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white">
-              Admin
-            </span>
+            <p className="text-sm font-medium text-white truncate">{user.name}</p>
+            <p className="text-xs text-zinc-400 truncate">{user.email}</p>
+            <span className="mt-1.5 inline-block rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white">Admin</span>
           </div>
           <button onClick={handleLogout} disabled={loggingOut}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors disabled:opacity-50">
@@ -157,141 +191,147 @@ export default function AdminFacultyPage() {
         </div>
       </aside>
 
-      {/* Main */}
-      <main className="ml-60 flex-1 px-8 py-8">
-        <div className="mb-8 flex items-start justify-between">
+      <main className="ml-60 flex-1 px-4 py-6 md:px-8 md:py-8">
+
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Faculty</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Manage faculty members — upload Excel or add manually.
-            </p>
+            <p className="mt-1 text-sm text-gray-600">Manage faculty members.</p>
           </div>
-          <div className="flex items-center gap-3">
-            {/* Excel Upload Button */}
-            <button
-              onClick={() => setShowExcelUpload(true)}
-              className="flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-700 transition-colors"
-            >
-              <FileSpreadsheet size={15} />
-              Upload Excel
-            </button>
-            {/* Manual Add Button */}
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition-colors"
-            >
-              <UserPlus size={15} />
-              Add Faculty
-            </button>
-          </div>
+          <button
+            onClick={() => router.push("/admin/faculty/new")}
+            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition-colors"
+          >
+            <UserPlus size={15} />Add Faculty
+          </button>
         </div>
 
-        <FacultyTable key={refreshKey} />
-      </main>
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
 
-      {/* ── Excel Upload Modal ── */}
-      {showExcelUpload && (
-        <FacultyExcelUpload
-          onImportComplete={() => setRefreshKey((prev) => prev + 1)}
-          onClose={() => setShowExcelUpload(false)}
-        />
-      )}
-
-      {/* ── Manual Add Faculty Modal ── */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl max-h-[90vh] overflow-y-auto">
-
-            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-              <h2 className="text-base font-semibold text-gray-900">Add New Faculty</h2>
-              <button
-                onClick={() => { setShowModal(false); setForm(EMPTY_FORM); }}
-                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-              >
-                <X size={18} />
-              </button>
+          {/* Toolbar */}
+          <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-5 py-4">
+            <div className="relative flex-1 min-w-50 max-w-sm">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search faculty..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
             </div>
-
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-6 py-5">
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-gray-800">Full Name</label>
-                <input name="name" value={form.name} onChange={handleChange}
-                  placeholder="Dr. John Smith"
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400" />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-gray-800">Email Address</label>
-                <input name="email" type="email" value={form.email} onChange={handleChange}
-                  placeholder="john@university.edu"
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400" />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-gray-800">Password</label>
-                <input name="password" type="password" value={form.password} onChange={handleChange}
-                  placeholder="Min. 6 characters"
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400" />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-gray-800">Gender</label>
-                <select name="gender" value={form.gender} onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400">
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-gray-800">Department</label>
-                <input name="department" value={form.department} onChange={handleChange}
-                  placeholder="Software Engineering"
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400" />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-gray-800">Designation</label>
-                <select name="designation" value={form.designation} onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400">
-                  <option value="">Select designation</option>
-                  <option value="Professor">Professor</option>
-                  <option value="Associate Professor">Associate Professor</option>
-                  <option value="Assistant Professor">Assistant Professor</option>
-                  <option value="Lecturer">Lecturer</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-gray-800">Phone</label>
-                <input name="phone" value={form.phone} onChange={handleChange}
-                  placeholder="03001234567"
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400" />
-              </div>
-
-              <div className="flex gap-3 pt-1">
-                <button type="button"
-                  onClick={() => { setShowModal(false); setForm(EMPTY_FORM); }}
-                  className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                  Cancel
-                </button>
-                <button type="submit" disabled={submitting}
-                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                  {submitting ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                      Adding...
-                    </span>
-                  ) : "Add Faculty"}
-                </button>
-              </div>
-
-            </form>
+            <p className="text-sm font-medium text-gray-500">
+              {filtered.length} member{filtered.length !== 1 ? "s" : ""}
+            </p>
+            {selected.size > 0 && (
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 transition-colors disabled:opacity-50 ml-auto"
+              >
+                {bulkDeleting ? (
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                ) : <Trash2 size={13} />}
+                Delete {selected.size} Selected
+              </button>
+            )}
           </div>
-        </div>
-      )}
 
+          {filtered.length === 0 ? (
+            <div className="py-16 text-center text-sm text-gray-500">
+              No faculty members found.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="px-4 py-3 text-left">
+                      <input
+                        type="checkbox"
+                        checked={selected.size === filtered.length && filtered.length > 0}
+                        onChange={toggleSelectAll}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-400 cursor-pointer"
+                      />
+                    </th>
+                    <th className="px-5 py-3 text-left">#</th>
+                    <th className="px-5 py-3 text-left">Name</th>
+                    <th className="px-5 py-3 text-left">Email</th>
+                    <th className="px-5 py-3 text-left">Department</th>
+                    <th className="px-5 py-3 text-left">Designation</th>
+                    <th className="px-5 py-3 text-left">Gender</th>
+                    <th className="px-5 py-3 text-left">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filtered.map((faculty, index) => (
+                    <tr key={faculty.id}
+                      className={`transition-colors ${selected.has(faculty.id) ? "bg-blue-50" : "hover:bg-gray-50"}`}>
+
+                      <td className="px-4 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(faculty.id)}
+                          onChange={() => toggleSelect(faculty.id)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-400 cursor-pointer"
+                        />
+                      </td>
+
+                      <td className="px-5 py-4 text-xs font-medium text-gray-400">{index + 1}</td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+                            {faculty.name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("")}
+                          </div>
+                          <span className="font-semibold text-gray-900">{faculty.name}</span>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4 text-gray-700">{faculty.email}</td>
+                      <td className="px-5 py-4 text-gray-700">{faculty.department || "—"}</td>
+
+                      <td className="px-5 py-4">
+                        <DesignationBadge designation={faculty.designation} />
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                          faculty.gender === "Female" ? "bg-pink-100 text-pink-700" : "bg-blue-100 text-blue-700"
+                        }`}>
+                          {faculty.gender || "—"}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => router.push(`/admin/faculty/${faculty.id}`)}
+                            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
+                          >
+                            <Pencil size={12} />Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(faculty.id, faculty.name)}
+                            disabled={deletingId === faculty.id}
+                            className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
+                          >
+                            {deletingId === faculty.id ? (
+                              <span className="h-3 w-3 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
+                            ) : <Trash2 size={12} />}
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   );
 }

@@ -3,40 +3,31 @@
 import { useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import {
-  collection, addDoc, getDocs,
-  setDoc, doc, Timestamp
+  collection, addDoc, getDocs, Timestamp, query, where,
 } from "firebase/firestore";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import toast from "react-hot-toast";
 import {
   Upload, X, FileSpreadsheet,
-  AlertCircle, CheckCircle,
-  University
+  AlertCircle, CheckCircle, AlertTriangle,
 } from "lucide-react";
 
-// ─────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────
 interface ExcelRow {
   rowNumber: number;
   title: string;
-  supervisorName: string;
-  supervisorId: string;
-  coSupervisor: string;
   student1: string;
   student2: string;
   student3: string;
   student4: string;
   students: string[];
-  studentCount: number;
+  supervisorName: string;
+  supervisorId: string;
+  coSupervisor: string;
   industrialPartner: string;
   sdg: string;
-  status: string;
   errors: string[];
   valid: boolean;
-  isNewSupervisor: boolean;
-  supervisorEmail: string;
+  isDuplicate: boolean;
 }
 
 interface FacultyMap {
@@ -48,23 +39,6 @@ interface ExcelUploadProps {
   onClose: () => void;
 }
 
-const DEFAULT_PASSWORD = "University@123";
-
-// ─── Generate email from name ────────────────
-function nameToEmail(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .replace(/^dr\.\s*/i, "")
-      .replace(/^ms\.\s*/i, "")
-      .replace(/^mr\.\s*/i, "")
-      .replace(/^prof\.\s*/i, "")
-      .trim()
-      .replace(/\s+/g, ".")
-      .replace(/[^a-z.]/g, "") + "@university.edu"
-  );
-}
-
 export default function ExcelUpload({ onImportComplete, onClose }: ExcelUploadProps) {
   const [rows, setRows]           = useState<ExcelRow[]>([]);
   const [importing, setImporting] = useState(false);
@@ -72,7 +46,7 @@ export default function ExcelUpload({ onImportComplete, onClose }: ExcelUploadPr
   const [fileName, setFileName]   = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // ─── Load existing faculty from Firestore ────
+  // ─── Load faculty map ────────────────────────
   const loadFacultyMap = async (): Promise<FacultyMap> => {
     const snap = await getDocs(collection(db, "users"));
     const map: FacultyMap = {};
@@ -85,13 +59,27 @@ export default function ExcelUpload({ onImportComplete, onClose }: ExcelUploadPr
     return map;
   };
 
+  // ─── Load existing project titles ────────────
+  const loadExistingTitles = async (): Promise<Set<string>> => {
+    const snap = await getDocs(collection(db, "projects"));
+    const titles = new Set<string>();
+    snap.docs.forEach((d) => {
+      const title = d.data().title?.trim().toLowerCase();
+      if (title) titles.add(title);
+    });
+    return titles;
+  };
+
   // ─── Parse Excel ─────────────────────────────
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
 
-    const facultyMap = await loadFacultyMap();
+    const [facultyMap, existingTitles] = await Promise.all([
+      loadFacultyMap(),
+      loadExistingTitles(),
+    ]);
 
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -101,79 +89,52 @@ export default function ExcelUpload({ onImportComplete, onClose }: ExcelUploadPr
         const sheet    = workbook.Sheets[workbook.SheetNames[0]];
         const raw      = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1 });
 
-        const newSupervisors: { [name: string]: string } = {};
         const dataRows = raw.slice(1).filter((row) => row && row.length > 0);
 
         const parsed: ExcelRow[] = dataRows.map((row, index) => {
-          // ── YOUR EXCEL COLUMN ORDER ──
-          // A=Title, B=Supervisor, C=Co-Supervisor,
-          // D=Student1, E=Student2, F=Student3, G=Student4,
-          // H=Industrial Partner, I=SDG, J=Status
           const title             = String(row[0] || "").trim();
-          const supervisorName    = String(row[1] || "").trim();
-          const coSupervisor      = String(row[2] || "").trim();
-          const student1          = String(row[3] || "").trim();
-          const student2          = String(row[4] || "").trim();
-          const student3          = String(row[5] || "").trim();
-          const student4          = String(row[6] || "").trim();
+          const student1          = String(row[1] || "").trim();
+          const student2          = String(row[2] || "").trim();
+          const student3          = String(row[3] || "").trim();
+          const student4          = String(row[4] || "").trim();
+          const supervisorName    = String(row[5] || "").trim();
+          const coSupervisor      = String(row[6] || "").trim();
           const industrialPartner = String(row[7] || "").trim();
           const sdg               = String(row[8] || "").trim();
-          const status            = String(row[9] || "pending").trim().toLowerCase();
 
-          // Collect only non-empty students
           const students = [student1, student2, student3, student4].filter(
             (s) => s.length > 0
           );
 
-          // Validate
           const errors: string[] = [];
-          if (!title)          errors.push("Title is required");
-          if (!supervisorName) errors.push("Supervisor name is required");
-          if (students.length < 2) errors.push("At least 2 students are required");
-          if (!sdg)            errors.push("SDG is required");
+          if (!title)           errors.push("Project title is required");
+          if (!supervisorName)  errors.push("Supervisor name is required");
+          if (students.length < 1) errors.push("At least 1 student is required");
+          if (!sdg)             errors.push("SDG is required");
 
-          // Match or assign supervisor
-          let supervisorId      = "";
-          let isNewSupervisor   = false;
-          let supervisorEmail   = "";
+          // Check if duplicate
+          const isDuplicate = title
+            ? existingTitles.has(title.toLowerCase())
+            : false;
 
-          if (supervisorName) {
-            const key = supervisorName.toLowerCase();
-            if (facultyMap[key]) {
-              supervisorId    = facultyMap[key];
-              isNewSupervisor = false;
-            } else if (newSupervisors[key]) {
-              supervisorId    = newSupervisors[key];
-              isNewSupervisor = true;
-            } else {
-              // New supervisor — reserve a temp key
-              // Real UID will come from Firebase Auth on import
-              newSupervisors[key] = `pending_${key}`;
-              supervisorId    = `pending_${key}`;
-              isNewSupervisor = true;
-            }
-            supervisorEmail = nameToEmail(supervisorName);
-          }
-
-          const validStatuses = ["pending", "under_review", "accepted", "rejected"];
-          const finalStatus   = validStatuses.includes(status) ? status : "pending";
+          // Match supervisor — no error if not found, just no link
+          const supervisorId = supervisorName
+            ? (facultyMap[supervisorName.toLowerCase()] || "")
+            : "";
 
           return {
             rowNumber: index + 2,
             title,
-            supervisorName,
-            supervisorId,
-            supervisorEmail,
-            coSupervisor: coSupervisor || "None",
             student1, student2, student3, student4,
             students,
-            studentCount: students.length,
+            supervisorName,
+            supervisorId,
+            coSupervisor:      coSupervisor || "None",
             industrialPartner: industrialPartner || "None",
             sdg,
-            status: finalStatus,
             errors,
-            valid: errors.length === 0,
-            isNewSupervisor,
+            valid:       errors.length === 0,
+            isDuplicate,
           };
         });
 
@@ -186,149 +147,60 @@ export default function ExcelUpload({ onImportComplete, onClose }: ExcelUploadPr
     reader.readAsArrayBuffer(file);
   };
 
-  // ─── Import all to Firebase Auth + Firestore ─
+  // ─── Import ──────────────────────────────────
   const handleImport = async () => {
-    const validRows = rows.filter((r) => r.valid);
-    if (validRows.length === 0) {
-      toast.error("No valid rows to import");
+    // Only import valid AND non-duplicate rows
+    const toImport = rows.filter((r) => r.valid && !r.isDuplicate);
+
+    if (toImport.length === 0) {
+      toast.error("No new projects to import");
       return;
     }
 
     setImporting(true);
+    let successCount = 0;
+    let failCount    = 0;
 
-    try {
-      // Save admin session
-      const currentAdmin = auth.currentUser;
+    for (const row of toImport) {
+      try {
+        await addDoc(collection(db, "projects"), {
+          title:             row.title,
+          supervisor:        row.supervisorName,
+          supervisorId:      row.supervisorId,
+          coSupervisor:      row.coSupervisor,
+          students:          row.students,
+          studentCount:      row.students.length,
+          industrialPartner: row.industrialPartner,
+          sdg:               row.sdg,
+          status:            "pending",
+          uploadedBy:        "excel_import",
+          uploadedAt:        Timestamp.now(),
+          updatedAt:         Timestamp.now(),
+        });
+        successCount++;
+      } catch {
+        failCount++;
+      }
+    }
 
-      // ── Step 1: Create Firebase Auth + Firestore for new supervisors ──
-      const createdSupervisors = new Map<string, string>();
-      // key = supervisorName.toLowerCase(), value = real Firebase UID
+    setImporting(false);
 
-      const newSupervisorRows = validRows.filter(
-        (r) => r.isNewSupervisor
+    if (successCount > 0) {
+      toast.success(
+        `${successCount} new project${successCount > 1 ? "s" : ""} imported successfully`
       );
-
-      // Get unique new supervisors
-      const uniqueNewSupervisors = [
-        ...new Map(
-          newSupervisorRows.map((r) => [r.supervisorName.toLowerCase(), r])
-        ).values(),
-      ];
-
-      for (const row of uniqueNewSupervisors) {
-        try {
-          // Create Firebase Auth account
-          const credential = await createUserWithEmailAndPassword(
-            auth,
-            row.supervisorEmail,
-            DEFAULT_PASSWORD
-          );
-          const newUid = credential.user.uid;
-
-          // Create Firestore profile
-          await setDoc(doc(db, "users", newUid), {
-            name:            row.supervisorName,
-            email:           row.supervisorEmail,
-            role:            "faculty",
-            gender:          "Male",
-            department:      "Not Set",
-            designation:     "Lecturer",
-            phone:           "Not Set",
-            joinedAt:        Timestamp.now(),
-            profileComplete: false,
-          });
-
-          createdSupervisors.set(row.supervisorName.toLowerCase(), newUid);
-        } catch (err: unknown) {
-          if (
-            err instanceof Error &&
-            err.message.includes("email-already-in-use")
-          ) {
-            // Already exists — look up their UID from Firestore
-            const snap = await getDocs(collection(db, "users"));
-            snap.docs.forEach((d) => {
-              const data = d.data();
-              if (
-                data.name?.toLowerCase() === row.supervisorName.toLowerCase()
-              ) {
-                createdSupervisors.set(row.supervisorName.toLowerCase(), d.id);
-              }
-            });
-          }
-        }
-      }
-
-      // Restore admin session
-      if (currentAdmin) {
-        await auth.updateCurrentUser(currentAdmin);
-      }
-
-      // ── Step 2: Insert projects with correct supervisorId ──
-      let successCount = 0;
-      let failCount    = 0;
-
-      for (const row of validRows) {
-        try {
-          // Get real UID — either from createdSupervisors or original facultyMap match
-          let realSupervisorId = row.supervisorId;
-          if (row.isNewSupervisor) {
-            realSupervisorId =
-              createdSupervisors.get(row.supervisorName.toLowerCase()) ||
-              row.supervisorId;
-          }
-
-          await addDoc(collection(db, "projects"), {
-            title:           row.title,
-            supervisor:      row.supervisorName,
-            supervisorId:    realSupervisorId,
-            coSupervisor:    row.coSupervisor,
-            students:        row.students,
-            studentCount:    row.studentCount,
-            industrialPartner: row.industrialPartner,
-            sdg:             row.sdg,
-            status:          row.status,
-            uploadedBy:      "excel_import",
-            uploadedAt:      Timestamp.now(),
-            updatedAt:       Timestamp.now(),
-          });
-          successCount++;
-        } catch {
-          failCount++;
-        }
-      }
-
-      if (createdSupervisors.size > 0) {
-        toast.success(
-          `${createdSupervisors.size} new faculty account${createdSupervisors.size > 1 ? "s" : ""} created — password: ${DEFAULT_PASSWORD}`
-        );
-      }
-      if (successCount > 0) {
-        toast.success(
-          `${successCount} project${successCount > 1 ? "s" : ""} imported successfully`
-        );
-        onImportComplete();
-        onClose();
-      }
-      if (failCount > 0) {
-        toast.error(`${failCount} project${failCount > 1 ? "s" : ""} failed`);
-      }
-
-    } catch {
-      toast.error("Import failed. Please try again.");
-    } finally {
-      setImporting(false);
+      onImportComplete();
+      onClose();
+    }
+    if (failCount > 0) {
+      toast.error(`${failCount} project${failCount > 1 ? "s" : ""} failed`);
     }
   };
 
-  const validCount          = rows.filter((r) => r.valid).length;
-  const invalidCount        = rows.filter((r) => !r.valid).length;
-  const newSupervisorsCount = [
-    ...new Set(
-      rows
-        .filter((r) => r.isNewSupervisor && r.valid)
-        .map((r) => r.supervisorName)
-    ),
-  ].length;
+  const validRows      = rows.filter((r) => r.valid);
+  const invalidCount   = rows.filter((r) => !r.valid).length;
+  const duplicateRows  = rows.filter((r) => r.valid && r.isDuplicate);
+  const newRows        = rows.filter((r) => r.valid && !r.isDuplicate);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
@@ -344,117 +216,112 @@ export default function ExcelUpload({ onImportComplete, onClose }: ExcelUploadPr
                 : `Preview — ${rows.length} rows found`}
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-          >
+          <button onClick={onClose}
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
             <X size={18} />
           </button>
         </div>
 
-        {/* ══════════════════════════════════════
-            STEP 1 — Upload
-        ══════════════════════════════════════ */}
+        {/* ── Step 1: Upload ── */}
         {step === "upload" && (
           <div className="flex flex-col items-center justify-center gap-6 px-6 py-12">
-
             <div className="w-full rounded-xl border border-gray-200 bg-gray-50 p-4">
-              <p className="mb-3 text-sm font-semibold text-gray-700">
+              <p className="mb-3 text-sm font-bold text-gray-800">
                 Required Excel Column Order:
               </p>
               <div className="grid grid-cols-5 gap-2 text-xs">
                 {[
                   ["A", "Project Title",      true],
-                  ["B", "Supervisor Name",    true],
-                  ["C", "Co-Supervisor",      false],
-                  ["D", "Student 1",          true],
-                  ["E", "Student 2",          true],
-                  ["F", "Student 3",          false],
-                  ["G", "Student 4",          false],
+                  ["B", "Student 1",          true],
+                  ["C", "Student 2",          false],
+                  ["D", "Student 3",          false],
+                  ["E", "Student 4",          false],
+                  ["F", "Supervisor Name",    true],
+                  ["G", "Co-Supervisor",      false],
                   ["H", "Industrial Partner", false],
                   ["I", "SDG",                true],
-                  ["J", "Status",             false],
                 ].map(([col, label, required]) => (
-                  <div
-                    key={String(col)}
-                    className={`rounded-lg px-2 py-1.5 text-center ${
+                  <div key={String(col)}
+                    className={`rounded-lg px-2 py-2 text-center ${
                       required
                         ? "bg-blue-50 border border-blue-200"
                         : "bg-gray-100 border border-gray-200"
-                    }`}
-                  >
-                    <p className="font-bold text-gray-800">{String(col)}</p>
-                    <p className={required ? "text-blue-700 text-xs" : "text-gray-500 text-xs"}>
+                    }`}>
+                    <p className="font-bold text-gray-900">{String(col)}</p>
+                    <p className={`text-xs mt-0.5 ${required ? "text-blue-700 font-semibold" : "text-gray-500"}`}>
                       {String(label)}
                     </p>
-                    {required && <p className="text-red-500 text-xs">required</p>}
+                    {required && <p className="text-red-500 text-xs mt-0.5">required</p>}
                   </div>
                 ))}
               </div>
-
-              {/* New supervisor notice */}
-              <div className="mt-3 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2">
-                <p className="text-xs font-medium text-blue-800">
-                  New supervisors are automatically created as faculty accounts.
-                </p>
-                <p className="mt-0.5 text-xs text-blue-600">
-                  Default login password:{" "}
-                  <span className="font-bold tracking-widest">{DEFAULT_PASSWORD}</span>
-                </p>
-              </div>
+              <p className="mt-3 text-xs text-gray-500">
+                If a supervisor is not yet in the Faculty list, the project will still be imported without a faculty link.
+              </p>
             </div>
 
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-3 rounded-xl border-2 border-dashed border-green-300 bg-green-50 px-8 py-6 text-green-600 hover:bg-green-100 transition-colors"
-            >
-              <Upload size={24} />
+            <button onClick={() => fileRef.current?.click()}
+              className="flex items-center gap-4 rounded-xl border-2 border-dashed border-green-300 bg-green-50 px-10 py-8 text-green-600 hover:bg-green-100 transition-colors">
+              <Upload size={28} />
               <div className="text-left">
-                <p className="font-semibold">Click to select Excel file</p>
-                <p className="text-sm text-green-400">.xlsx files only</p>
+                <p className="font-bold text-base">Click to select Excel file</p>
+                <p className="text-sm text-green-500 mt-0.5">.xlsx files only</p>
               </div>
             </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".xlsx"
-              onChange={handleFile}
-              className="hidden"
-            />
+            <input ref={fileRef} type="file" accept=".xlsx" onChange={handleFile} className="hidden" />
           </div>
         )}
 
-        {/* ══════════════════════════════════════
-            STEP 2 — Preview
-        ══════════════════════════════════════ */}
+        {/* ── Step 2: Preview ── */}
         {step === "preview" && (
           <>
             {/* Stats bar */}
             <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-3 shrink-0 flex-wrap">
               <div className="flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1">
                 <CheckCircle size={14} className="text-green-600" />
-                <span className="text-xs font-medium text-green-700">
-                  {validCount} valid
+                <span className="text-xs font-semibold text-green-700">
+                  {newRows.length} new
                 </span>
               </div>
-              {invalidCount > 0 && (
-                <div className="flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1">
-                  <AlertCircle size={14} className="text-red-600" />
-                  <span className="text-xs font-medium text-red-700">
-                    {invalidCount} errors
+              {duplicateRows.length > 0 && (
+                <div className="flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1">
+                  <AlertTriangle size={14} className="text-amber-600" />
+                  <span className="text-xs font-semibold text-amber-700">
+                    {duplicateRows.length} already exist
                   </span>
                 </div>
               )}
-              {newSupervisorsCount > 0 && (
-                <div className="flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1">
-                  <CheckCircle size={14} className="text-blue-600" />
-                  <span className="text-xs font-medium text-blue-700">
-                    {newSupervisorsCount} new faculty will be created
+              {invalidCount > 0 && (
+                <div className="flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1">
+                  <AlertCircle size={14} className="text-red-600" />
+                  <span className="text-xs font-semibold text-red-700">
+                    {invalidCount} errors
                   </span>
                 </div>
               )}
               <p className="text-xs text-gray-400 ml-auto">File: {fileName}</p>
             </div>
+
+            {/* Duplicate warning */}
+            {duplicateRows.length > 0 && (
+              <div className="mx-6 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shrink-0">
+                <p className="text-sm font-bold text-amber-900 mb-1">
+                  ⚠️ {duplicateRows.length} project{duplicateRows.length > 1 ? "s" : ""} already exist in the database:
+                </p>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {duplicateRows.map((row) => (
+                    <span key={row.rowNumber}
+                      className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                      {row.title}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs font-medium text-amber-700">
+                  These will be skipped. Only {newRows.length} new project{newRows.length !== 1 ? "s" : ""} will be imported.
+                  To re-upload a duplicate, delete it first from the Projects page then upload again.
+                </p>
+              </div>
+            )}
 
             {/* Table */}
             <div className="overflow-auto flex-1 px-6 py-4">
@@ -462,122 +329,86 @@ export default function ExcelUpload({ onImportComplete, onClose }: ExcelUploadPr
                 <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 sticky top-0">
                   <tr>
                     <th className="px-3 py-2 text-left">Row</th>
-                    <th className="px-3 py-2 text-left">Title</th>
-                    <th className="px-3 py-2 text-left">Supervisor</th>
+                    <th className="px-3 py-2 text-left">Project Title</th>
                     <th className="px-3 py-2 text-left">Students</th>
+                    <th className="px-3 py-2 text-left">Supervisor</th>
+                    <th className="px-3 py-2 text-left">Co-Supervisor</th>
+                    <th className="px-3 py-2 text-left">Partner</th>
                     <th className="px-3 py-2 text-left">SDG</th>
-                    <th className="px-3 py-2 text-left">Status</th>
                     <th className="px-3 py-2 text-left">Result</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {rows.map((row) => (
-                    <tr
-                      key={row.rowNumber}
+                    <tr key={row.rowNumber}
                       className={
-                        row.valid ? "bg-white hover:bg-gray-50" : "bg-red-50"
-                      }
-                    >
-                      <td className="px-3 py-2 text-gray-400">{row.rowNumber}</td>
+                        !row.valid
+                          ? "bg-red-50"
+                          : row.isDuplicate
+                          ? "bg-amber-50"
+                          : "bg-white hover:bg-gray-50"
+                      }>
 
-                      <td className="px-3 py-2 font-medium text-gray-900 max-w-[160px] truncate">
-                        {row.title || "—"}
+                      <td className="px-3 py-2 text-gray-400 font-medium">{row.rowNumber}</td>
+
+                      <td className="px-3 py-2 max-w-[160px]">
+                        <p className="font-semibold text-gray-900 truncate">{row.title || "—"}</p>
                       </td>
 
-                      <td className="px-3 py-2 text-gray-600">
-                        <div className="font-medium">{row.supervisorName || "—"}</div>
-                        {row.supervisorName && (
-                          row.isNewSupervisor ? (
-                            <div className="text-blue-500 text-xs">★ new — {row.supervisorEmail}</div>
-                          ) : (
-                            <div className="text-green-600 text-xs">✓ existing</div>
-                          )
-                        )}
-                      </td>
-
-                      <td className="px-3 py-2 text-gray-600">
+                      <td className="px-3 py-2">
                         <div className="flex flex-col gap-0.5">
-                          {row.students.map((s, i) => (
-                            <span key={i} className="text-xs">{s}</span>
-                          ))}
-                          {row.students.length === 0 && (
-                            <span className="text-red-500 text-xs">required</span>
-                          )}
+                          {row.students.length > 0
+                            ? row.students.map((s, i) => (
+                                <span key={i} className="text-gray-700">{s}</span>
+                              ))
+                            : <span className="text-red-500">required</span>}
                         </div>
+                        <span className="text-gray-400">({row.students.length}/4)</span>
                       </td>
 
                       <td className="px-3 py-2">
-                        {row.sdg ? (
-                          <span className="rounded-full bg-green-50 px-2 py-0.5 font-medium text-green-700 text-xs">
-                            {row.sdg}
-                          </span>
-                        ) : (
-                          <span className="text-red-500 text-xs">required</span>
+                        <p className="font-semibold text-gray-900">{row.supervisorName || "—"}</p>
+                        {row.supervisorName && (
+                          row.supervisorId
+                            ? <span className="text-green-600 text-xs font-medium">✓ linked</span>
+                            : <span className="text-gray-400 text-xs">no link</span>
                         )}
                       </td>
 
-                      <td className="px-3 py-2">
-                        <span
-                          className={`rounded-full px-2 py-0.5 font-medium text-xs ${
-                            row.status === "accepted"
-                              ? "bg-green-50 text-green-700"
-                              : row.status === "rejected"
-                              ? "bg-red-50 text-red-700"
-                              : row.status === "under_review"
-                              ? "bg-yellow-50 text-yellow-700"
-                              : "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          {row.status}
-                        </span>
+                      <td className="px-3 py-2 text-gray-600">
+                        {row.coSupervisor !== "None" ? row.coSupervisor : "—"}
+                      </td>
+
+                      <td className="px-3 py-2 text-gray-600">
+                        {row.industrialPartner !== "None" ? row.industrialPartner : "—"}
                       </td>
 
                       <td className="px-3 py-2">
-                        {row.valid ? (
-                          <span className="text-green-600 font-medium">✓ Ready</span>
-                        ) : (
+                        {row.sdg
+                          ? <span className="rounded-full bg-green-50 px-2 py-0.5 font-semibold text-green-700">{row.sdg}</span>
+                          : <span className="text-red-500">required</span>}
+                      </td>
+
+                      {/* Result */}
+                      <td className="px-3 py-2">
+                        {!row.valid ? (
                           <div className="text-red-600">
                             {row.errors.map((err, i) => (
                               <div key={i} className="text-xs">• {err}</div>
                             ))}
                           </div>
+                        ) : row.isDuplicate ? (
+                          <span className="text-amber-600 font-bold">Already exists</span>
+                        ) : (
+                          <span className="text-green-600 font-bold">✓ New</span>
                         )}
                       </td>
+
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-
-            {/* New faculty notice */}
-            {newSupervisorsCount > 0 && (
-              <div className="mx-6 mb-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 shrink-0">
-                <p className="text-sm font-medium text-blue-800 mb-1">
-                  {newSupervisorsCount} new faculty account
-                  {newSupervisorsCount > 1 ? "s" : ""} will be created with login access:
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    ...new Set(
-                      rows
-                        .filter((r) => r.isNewSupervisor && r.valid)
-                        .map((r) => r.supervisorName)
-                    ),
-                  ].map((name) => (
-                    <span
-                      key={name}
-                      className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700"
-                    >
-                      {name}
-                    </span>
-                  ))}
-                </div>
-                <p className="mt-2 text-xs text-blue-600">
-                  Default password:{" "}
-                  <span className="font-bold tracking-widest">{DEFAULT_PASSWORD}</span>
-                </p>
-              </div>
-            )}
 
             {/* Footer */}
             <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4 shrink-0">
@@ -588,15 +419,13 @@ export default function ExcelUpload({ onImportComplete, onClose }: ExcelUploadPr
                   setFileName("");
                   if (fileRef.current) fileRef.current.value = "";
                 }}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              >
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
                 ← Upload Different File
               </button>
               <button
                 onClick={handleImport}
-                disabled={importing || validCount === 0}
-                className="flex items-center gap-2 rounded-xl bg-green-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
+                disabled={importing || newRows.length === 0}
+                className="flex items-center gap-2 rounded-xl bg-green-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-green-700 transition-colors disabled:opacity-50 shadow-sm">
                 {importing ? (
                   <>
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -605,7 +434,7 @@ export default function ExcelUpload({ onImportComplete, onClose }: ExcelUploadPr
                 ) : (
                   <>
                     <FileSpreadsheet size={15} />
-                    Import {validCount} Project{validCount !== 1 ? "s" : ""}
+                    Import {newRows.length} New Project{newRows.length !== 1 ? "s" : ""}
                   </>
                 )}
               </button>

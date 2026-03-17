@@ -1,60 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { db } from "@/lib/firebase";
-import {
-  doc, getDoc, updateDoc, Timestamp,
-} from "firebase/firestore";
 import {
   GraduationCap, FolderOpen, Users, LogOut,
-  LayoutDashboard, ArrowLeft, Save, Mail,
+  LayoutDashboard, ArrowLeft,
 } from "lucide-react";
 import Link from "next/link";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc, Timestamp } from "firebase/firestore";
+import { secondaryAuth, db } from "@/lib/firebase";
 import toast from "react-hot-toast";
 
-interface Faculty {
-  id: string;
-  name: string;
-  email: string;
-  gender: string;
-  department: string;
-  designation: string;
-  phone: string;
-  joinedAt?: { seconds: number };
-}
-
-function DesignationBadge({ designation }: { designation: string }) {
-  const map: Record<string, string> = {
-    "Professor":           "bg-purple-100 text-purple-700",
-    "Associate Professor": "bg-blue-100 text-blue-700",
-    "Assistant Professor": "bg-cyan-100 text-cyan-700",
-    "Lecturer":            "bg-green-100 text-green-700",
-  };
-  return (
-    <span className={`rounded-full px-3 py-1 text-xs font-bold ${map[designation] || "bg-gray-100 text-gray-600"}`}>
-      {designation || "—"}
-    </span>
-  );
-}
-
-export default function AdminFacultyDetailPage() {
-  const params  = useParams();
-  const id      = params?.id as string;
-  const router  = useRouter();
+export default function AddFacultyPage() {
   const { user, loading, logout } = useAuth();
-
-  const [faculty, setFaculty]       = useState<Faculty | null>(null);
-  const [fetching, setFetching]     = useState(true);
-  const [saving, setSaving]         = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
+  const router = useRouter();
 
   const [name, setName]               = useState("");
+  const [email, setEmail]             = useState("");
+  const [password, setPassword]       = useState("");
   const [gender, setGender]           = useState("Male");
   const [department, setDepartment]   = useState("");
   const [designation, setDesignation] = useState("");
   const [phone, setPhone]             = useState("");
+  const [submitting, setSubmitting]   = useState(false);
+  const [loggingOut, setLoggingOut]   = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -62,49 +33,43 @@ export default function AdminFacultyDetailPage() {
     if (user.role !== "admin") { router.push("/faculty/dashboard"); return; }
   }, [user, loading, router]);
 
-  useEffect(() => {
-    if (!id || loading || !user) return;
-    const fetchData = async () => {
-      setFetching(true);
-      try {
-        const snap = await getDoc(doc(db, "users", id));
-        if (!snap.exists()) { router.push("/admin/faculty"); return; }
-        const data = { id: snap.id, ...snap.data() } as Faculty;
-        setFaculty(data);
-        setName(data.name || "");
-        setGender(data.gender || "Male");
-        setDepartment(data.department || "");
-        setDesignation(data.designation || "");
-        setPhone(data.phone || "");
-      } catch {
-        toast.error("Failed to load faculty");
-        router.push("/admin/faculty");
-      } finally {
-        setFetching(false);
-      }
-    };
-    fetchData();
-  }, [id, user, loading, router]);
-
-  const handleSave = async () => {
-    if (!name || !department || !designation || !phone) {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !email || !password || !department || !designation || !phone) {
       toast.error("Please fill in all fields");
       return;
     }
-    setSaving(true);
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    setSubmitting(true);
     try {
-      await updateDoc(doc(db, "users", id), {
-        name, gender, department, designation, phone,
-        updatedAt: Timestamp.now(),
-      });
-      toast.success("Faculty updated successfully");
-      setFaculty((prev) =>
-        prev ? { ...prev, name, gender, department, designation, phone } : prev
+      const credential = await createUserWithEmailAndPassword(
+        secondaryAuth, email, password
       );
-    } catch {
-      toast.error("Failed to save changes");
+      const newUid = credential.user.uid;
+      await secondaryAuth.signOut();
+      await setDoc(doc(db, "users", newUid), {
+        name, email, role: "faculty",
+        gender, department, designation, phone,
+        joinedAt: Timestamp.now(),
+        profileComplete: true,
+      });
+      toast.success(`${name} added successfully`);
+      router.push("/admin/faculty");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        if (error.message.includes("email-already-in-use")) {
+          toast.error("This email is already registered");
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.error("Failed to add faculty");
+      }
     } finally {
-      setSaving(false);
+      setSubmitting(false);
     }
   };
 
@@ -114,14 +79,7 @@ export default function AdminFacultyDetailPage() {
     window.location.href = "/login";
   };
 
-  const formatDate = (ts?: { seconds: number }) => {
-    if (!ts) return "Not set";
-    return new Date(ts.seconds * 1000).toLocaleDateString("en-PK", {
-      day: "numeric", month: "long", year: "numeric",
-    });
-  };
-
-  if (loading || fetching) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
@@ -129,7 +87,7 @@ export default function AdminFacultyDetailPage() {
     );
   }
 
-  if (!user || !faculty) return null;
+  if (!user) return null;
 
   const inputClass = "w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all";
   const labelClass = "block mb-2 text-xs font-bold uppercase tracking-wide text-gray-600";
@@ -170,76 +128,34 @@ export default function AdminFacultyDetailPage() {
         </div>
       </aside>
 
-      {/* Main */}
+      {/* Main — full page */}
       <main className="ml-60 flex-1 flex flex-col px-8 py-8">
 
-        {/* Top bar */}
-        <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
-          <button onClick={() => router.push("/admin/faculty")}
-            className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900 transition-colors">
-            <ArrowLeft size={16} />Back to Faculty
-          </button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex items-center gap-2 rounded-xl bg-green-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-green-700 transition-colors disabled:opacity-50 shadow-sm">
-            {saving ? (
-              <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save size={15} />
-                Save Changes
-              </>
-            )}
-          </button>
+        {/* Back */}
+        <button onClick={() => router.push("/admin/faculty")}
+          className="mb-6 flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900 transition-colors w-fit">
+          <ArrowLeft size={16} />Back to Faculty
+        </button>
+
+        {/* Page title */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">Add New Faculty</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Create a new faculty account with login access.
+          </p>
         </div>
 
-        {/* Profile banner */}
-        <div className="mb-6 rounded-2xl border border-gray-200 bg-white px-8 py-6 shadow-sm">
-          <div className="flex items-center gap-5">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-xl font-bold text-white shadow">
-              {name
-                .split(" ")
-                .filter(Boolean)
-                .slice(0, 2)
-                .map((w) => w[0].toUpperCase())
-                .join("")}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 flex-wrap mb-1.5">
-                <h1 className="text-xl font-bold text-gray-900">{name || faculty.name}</h1>
-                <DesignationBadge designation={designation || faculty.designation} />
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${
-                  (gender || faculty.gender) === "Female"
-                    ? "bg-pink-100 text-pink-700"
-                    : "bg-blue-100 text-blue-700"
-                }`}>
-                  {gender || faculty.gender}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-5">
-                <span className="flex items-center gap-1.5 text-sm font-medium text-gray-600">
-                  <Mail size={13} className="text-gray-400" />
-                  {faculty.email}
-                </span>
-                <span className="text-sm font-medium text-gray-500">
-                  Joined: {formatDate(faculty.joinedAt)}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Edit form — full width card */}
+        {/* Full width form card */}
         <div className="flex-1 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
 
-          <div className="border-b border-gray-100 bg-gray-50 px-8 py-5">
-            <p className="text-base font-bold text-gray-800">Edit Faculty Details</p>
-            <p className="text-sm text-gray-500 mt-0.5">Update the faculty member information below</p>
+          {/* Card header */}
+          <div className="border-b border-gray-100 px-8 py-5 bg-gray-50">
+            <p className="text-base font-bold text-gray-800">Faculty Information</p>
+            <p className="text-sm text-gray-500 mt-0.5">All fields are required</p>
           </div>
 
-          <div className="px-8 py-8">
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="px-8 py-8">
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
 
               {/* Full Name — spans full row */}
@@ -249,6 +165,30 @@ export default function AdminFacultyDetailPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Dr. John Smith"
+                  className={inputClass}
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className={labelClass}>Email Address</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="john@university.edu"
+                  className={inputClass}
+                />
+              </div>
+
+              {/* Password */}
+              <div>
+                <label className={labelClass}>Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Min. 6 characters"
                   className={inputClass}
                 />
               </div>
@@ -306,9 +246,10 @@ export default function AdminFacultyDetailPage() {
 
             </div>
 
+            {/* Divider */}
             <div className="my-8 border-t border-gray-100" />
 
-            {/* Save button */}
+            {/* Buttons */}
             <div className="flex items-center gap-4">
               <button
                 type="button"
@@ -318,14 +259,20 @@ export default function AdminFacultyDetailPage() {
                 Cancel
               </button>
               <button
-                onClick={handleSave}
-                disabled={saving}
-                className="rounded-xl bg-green-600 px-8 py-3 text-sm font-bold text-white hover:bg-green-700 transition-colors disabled:opacity-50"
+                type="submit"
+                disabled={submitting}
+                className="rounded-xl bg-blue-600 px-8 py-3 text-sm font-bold text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
-                {saving ? "Saving..." : "Save Changes"}
+                {submitting ? (
+                  <span className="flex items-center gap-2">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Adding...
+                  </span>
+                ) : "Add Faculty"}
               </button>
             </div>
-          </div>
+
+          </form>
         </div>
       </main>
     </div>
