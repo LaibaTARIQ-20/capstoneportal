@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { initializeFirestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey:            process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -11,21 +11,21 @@ const firebaseConfig = {
   appId:             process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// ── Primary app (main admin session) ────────
-const app =
-  getApps().find((a) => a.name === "[DEFAULT]") ||
-  initializeApp(firebaseConfig);
-
+// Primary app
+const app = getApps().find((a) => a.name === "[DEFAULT]") || initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
-export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-});
+// ✅ Safe Firestore init — avoids double-init error
+let db: ReturnType<typeof getFirestore>;
+try {
+  db = initializeFirestore(app, { experimentalForceLongPolling: true });
+} catch {
+  db = getFirestore(app);
+}
+export { db };
 
-// ── Secondary app (for creating faculty accounts) ──
-// This keeps admin session completely untouched
+// Secondary app (for creating faculty without losing admin session)
 const secondaryApp =
   getApps().find((a) => a.name === "secondary") ||
   initializeApp(firebaseConfig, "secondary");
-
 export const secondaryAuth = getAuth(secondaryApp);
