@@ -1,34 +1,32 @@
 # 🎓 Capstone Portal
 
-A full-stack FYP (Final Year Project) management portal built with **Next.js**, **TypeScript**, **Tailwind CSS**, and **Firebase**. Supports two roles: Admin and Faculty with real-time data, authentication, and complete CRUD operations.
+A full-stack **Final Year Project (FYP) management portal** built with Next.js 15, TypeScript, Tailwind CSS v4, and Firebase. Supports two roles, **Admin** and **Faculty**, with real-time data, Firebase authentication, role-based access control, project evaluation system, and bulk Excel import.
 
 ---
 
 ## 📸 Features
 
 ### Admin
-- Login with email/password or Google
-- View all projects with search and filtering
-- Add new projects via a modal form
+- Login with email/password or Google OAuth
+- View all projects with search and bulk selection
+- Import projects from Excel (.xlsx) with duplicate detection and conflict resolution dialogue
 - Change project status (Pending → Under Review → Accepted → Rejected)
-- Delete projects
-- View all faculty members
-- Add new faculty (creates Firebase Auth account + Firestore profile)
-- Edit faculty info inline
-- Delete faculty
+- Bulk delete or individually delete projects — all with proper UI confirmation dialogues (no browser alerts)
+- View, add, edit, and delete faculty members
 - View individual faculty detail page with their supervised projects
-<img width="330" height="330" alt="image" src="https://github.com/user-attachments/assets/90746a62-0e77-4d9d-9ae8-d5ccb6105713" />
-<img width="512" height="256" alt="image" src="https://github.com/user-attachments/assets/2110e5a9-07e5-4ec0-a2f1-154b75c395cc" />
-<img width="330" height="330" alt="image" src="https://github.com/user-attachments/assets/90780f28-46d1-4b60-b3c3-9442a864d5e1" />
-<img width="512" height="232" alt="image" src="https://github.com/user-attachments/assets/1bfcb543-ce71-4638-aebf-81acca2a7bbb" />
 
 ### Faculty
-- Login with email/password or Google
-- View only their own supervised projects
+- Login with email/password or Google OAuth
+- View all assigned projects with search
+- View and evaluate projects — separate screens for each
+- **Phase-based evaluation system** (Synopsis → Progress → Demo → Final)
+  - Phases unlock sequentially — must complete each phase for ALL students before advancing
+  - Each student was evaluated independently, with per-student data stored separately
+  - Rating questions (1–5 scale with colour-coded labels) and Grade questions (Approved/Excellent/Redo, etc.)
+  - Live progress tracking per student and per phase
+  - Auto-navigation to the next student/phase on completion
 - Dashboard with personal project stats
-- See project status updates made by the admin
-<img width="512" height="251" alt="image" src="https://github.com/user-attachments/assets/9a59d7de-c24a-4a9c-9e2a-610d2514bc93" />
-<img width="512" height="245" alt="image" src="https://github.com/user-attachments/assets/41fbf7ab-be90-41e2-82b2-db45cd95f313" />
+- Sidebar never reloads during navigation — only the content area updates
 
 ---
 
@@ -36,13 +34,14 @@ A full-stack FYP (Final Year Project) management portal built with **Next.js**, 
 
 | Technology | Purpose |
 |---|---|
-| Next.js 15 (App Router) | Frontend framework |
+| Next.js 15 (App Router) | Frontend framework with file-based routing |
 | TypeScript | Type safety |
-| Tailwind CSS v4 | Styling |
-| Firebase Auth | Authentication |
-| Cloud Firestore | Database |
+| Tailwind CSS v4 | Utility-first styling |
+| Firebase Auth | Email/password and Google authentication |
+| Cloud Firestore | NoSQL real-time database |
 | react-hot-toast | Toast notifications |
-| lucide-react | Icons |
+| lucide-react | Icon library |
+| xlsx (SheetJS) | Excel file parsing for bulk import |
 
 ---
 
@@ -52,26 +51,40 @@ A full-stack FYP (Final Year Project) management portal built with **Next.js**, 
 capstoneportal/
 ├── app/
 │   ├── admin/
+│   │   ├── layout.tsx              # Admin route guard + sidebar wrapper
 │   │   ├── dashboard/page.tsx      # Admin dashboard with stats
-│   │   ├── projects/page.tsx       # All projects + add project modal
+│   │   ├── projects/
+│   │   │   ├── page.tsx            # All projects + Excel import
+│   │   │   └── [id]/page.tsx       # Project detail + delete
 │   │   ├── faculty/
-│   │   │   ├── page.tsx            # Faculty list + add faculty modal
-│   │   │   └── [id]/page.tsx       # Individual faculty detail page
-│   │   └── seed/page.tsx           # Database seeder (run once)
+│   │   │   ├── page.tsx            # Faculty list + add/delete
+│   │   │   ├── new/page.tsx        # Add new faculty form
+│   │   │   └── [id]/page.tsx       # Edit faculty detail
+│   │
+│   │   
 │   ├── faculty/
-│   │   ├── dashboard/page.tsx      # Faculty dashboard
-│   │   └── projects/page.tsx       # Faculty's own projects
+│   │   ├── dashboard/page.tsx      # Faculty dashboard with stats
+│   │   └── projects/
+│   │       ├── page.tsx            # Faculty's projects (view + evaluate)
+│   │       └── [id]/
+│   │           ├── page.tsx        # Project detail view
+│   │           └── evaluate/
+│   │               └── page.tsx    # Phase-based evaluation form
 │   ├── login/page.tsx              # Login page
-│   ├── layout.tsx                  # Root layout with AuthProvider
+│   ├── layout.tsx                  # Root layout with AuthProvider + Toaster
 │   └── page.tsx                    # Redirects to /login
 ├── components/
-│   ├── ProjectsTable.tsx           # Reusable projects table
-│   └── FacultyTable.tsx            # Reusable faculty table with inline edit
+│   ├── AdminLayout.tsx             # Persistent sidebar layout (never reloads)
+│   ├── ConfirmDialog.tsx           # Reusable UI confirm dialog (replaces browser alerts)
+│   ├── ProjectsTable.tsx           # Reusable projects table (admin + faculty)
+│   ├── ExcelUpload.tsx             # Excel import modal with duplicate detection
+│   ├── FacultyExcelUpload.tsx      # Faculty bulk import modal
+│   └── FacultyTable.tsx            # Faculty table with inline edit
 ├── context/
 │   └── AuthContext.tsx             # Global auth state
 ├── lib/
-│   ├── firebase.ts                 # Firebase initialization
-│   └── auth.ts                     # Auth functions
+│   ├── firebase.ts                 # Firebase init (primary + secondary app)
+│   └── auth.ts                     # Auth helper functions
 ├── types/
 │   └── index.ts                    # TypeScript interfaces
 └── .env.local                      # Firebase config (not committed)
@@ -82,30 +95,25 @@ capstoneportal/
 ## 🚀 Getting Started
 
 ### 1. Clone the repository
-
 ```bash
 git clone https://github.com/your-username/capstoneportal.git
 cd capstoneportal
 ```
 
 ### 2. Install dependencies
-
 ```bash
 npm install
 ```
 
 ### 3. Create a Firebase project
-
-- Go to [firebase.google.com](https://firebase.google.com)
-- Create a new project
-- Enable **Authentication** → Email/Password and Google providers
-- Enable **Cloud Firestore** database
-- Go to Project Settings → Web App → copy config
+1. Go to [firebase.google.com](https://firebase.google.com)
+2. Create a new project
+3. Enable **Authentication** → Email/Password and Google providers
+4. Enable **Cloud Firestore** database
+5. Go to Project Settings → Web App → copy the config
 
 ### 4. Set up environment variables
-
-Create a `.env.local` file in the root:
-
+Create `.env.local` in the project root:
 ```env
 NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
@@ -115,37 +123,36 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 ```
 
-### 5. Set Firestore rules
-
+### 5. Set Firestore security rules
 In Firebase Console → Firestore → Rules:
-
-```
+```js
 rules_version = '2';
-Service Cloud.firestore {
+service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
+    match /projects/{projectId} {
+      allow read, write: if request.auth != null;
+    }
+    match /users/{userId} {
+      allow read, write: if request.auth != null;
+    }
+    match /evaluations/{evalId} {
+      allow read, write: if request.auth != null;
     }
   }
 }
 ```
 
 ### 6. Create an admin account
-
 In Firebase Console → Authentication → Add user:
+- **Email:** `admin@university.edu`
+- **Password:** `University@123`
 
-```
-Email:    admin@university.edu
-Password: University@123
-```
-
-Then in Firestore → `users` collection → Add document with the admin UID:
-
+Then in Firestore → `users` collection → Add document with the admin's Auth UID:
 ```
 name            → Admin User
 email           → admin@university.edu
 role            → admin
-gender          → Female
+gender          → Male
 department      → Administration
 designation     → System Admin
 phone           → 03001234567
@@ -153,26 +160,17 @@ profileComplete → true (boolean)
 ```
 
 ### 7. Run the development server
-
 ```bash
 npm run dev
 ```
-
 Open [http://localhost:3000](http://localhost:3000)
 
-### 8. Seed dummy data (optional)
-
-After logging in as admin, go to:
-
-```
-http://localhost:3000/admin/seed
-```
-
-Click **Seed Database** to automatically create 4 faculty accounts and 10 sample projects.
+### 8. Import real project data (Excel)
+1. Go to **Admin → Projects → Import from Excel** to upload projects
 
 ---
 
-## 👥 Default Accounts (after seeding)
+## 👥 Default Accounts
 
 | Name | Email | Password | Role |
 |---|---|---|---|
@@ -187,51 +185,65 @@ Click **Seed Database** to automatically create 4 faculty accounts and 10 sample
 ## 🗄️ Firestore Collections
 
 ### `users`
-```
-uid             (document ID = Firebase Auth UID)
-name            string
-email           string
-role            "admin" | "faculty"
-gender          "Male" | "Female"
-department      string
-designation     string
-phone           string
-joinedAt        timestamp
-profileComplete boolean
-```
+| Field | Type | Description |
+|---|---|---|
+| uid | string | Document ID = Firebase Auth UID |
+| name | string | Full name |
+| email | string | Login email |
+| role | string | `"admin"` or `"faculty"` |
+| gender | string | `"Male"` or `"Female"` |
+| department | string | Department name |
+| designation | string | Professor / Associate Professor etc. |
+| phone | string | Contact number |
+| joinedAt | timestamp | Account creation date |
+| profileComplete | boolean | Profile setup status |
 
 ### `projects`
-```
-title           string
-supervisor      string
-supervisorId    string (Firebase Auth UID of faculty)
-coSupervisor    string
-students        array of strings
-studentCount    number
-industrialPartner string
-sdg             string
-status          "pending" | "under_review" | "accepted" | "rejected"
-uploadedBy      string
-uploadedAt      timestamp
-updatedAt       timestamp
-```
+| Field | Type | Description |
+|---|---|---|
+| title | string | Project title |
+| supervisor | string | Faculty name (denormalised) |
+| supervisorId | string | Firebase Auth UID of supervisor |
+| coSupervisor | string | Co-supervisor name or `"None"` |
+| students | array | List of student names |
+| studentCount | number | Length of students array |
+| industrialPartner | string | Company name or `"None"` |
+| sdg | string | e.g. `"SDG 4"`, `"SDG 11"` |
+| status | string | `pending` / `under_review` / `accepted` / `rejected` |
+| uploadedBy | string | UID of creator or `"excel_import"` |
+| uploadedAt | timestamp | Creation date |
+| updatedAt | timestamp | Last update date |
+
+### `evaluations`
+| Field | Type | Description |
+|---|---|---|
+| projectId | string | Reference to project document |
+| projectTitle | string | Cached project title |
+| facultyId | string | UID of evaluating faculty |
+| facultyName | string | Name of evaluating faculty |
+| synopsis | object | `{ studentName: { questionId: value } }` |
+| progress | object | Same structure as synopsis |
+| demo | object | Same structure as synopsis |
+| final | object | Same structure as synopsis |
+| updatedAt | timestamp | Last save timestamp |
 
 ---
 
-## 🔐 Role-Based Access
+## 🔐 Role-Based Access Control
 
 | Feature | Admin | Faculty |
 |---|---|---|
 | View all projects | ✅ | ❌ |
-| View own projects | ✅ | ✅ |
-| Add project | ✅ | ❌ |
+| View own assigned projects | ✅ | ✅ |
+| Add / import projects | ✅ | ❌ |
 | Change project status | ✅ | ❌ |
-| Delete project | ✅ | ❌ |
+| Delete projects | ✅ | ❌ |
+| Evaluate projects (per-student, per-phase) | ❌ | ✅ |
 | View all faculty | ✅ | ❌ |
-| Add faculty | ✅ | ❌ |
-| Edit faculty | ✅ | ❌ |
+| Add / import faculty | ✅ | ❌ |
+| Edit faculty profile | ✅ | ❌ |
 | Delete faculty | ✅ | ❌ |
-| View faculty detail | ✅ | ❌ |
+| Fix/Sync utility | ✅ | ❌ |
 
 ---
 
@@ -241,19 +253,40 @@ updatedAt       timestamp
 pending  →  under_review  →  accepted
                           →  rejected
 ```
-
-Status is updated by admin only via the dropdown in the projects table.
+Status is updated by the admin only via the dropdown in the projects table.
 
 ---
 
-## 🎨 Status Color Coding
+## 📝 Evaluation Phase Flow
 
-| Status | Color |
+```
+Synopsis  →  Progress  →  Demo  →  Final
+```
+- Each phase unlocks only when the previous phase is **100% complete for ALL students**
+- Each student is evaluated independently — answers are not shared across group members
+- Save is disabled until all questions in the current phase are answered for the active student
+- Auto-navigation guides faculty from student to student, then phase to phase
+
+---
+
+## 🎨 Status Colour Coding
+
+| Status | Colour |
 |---|---|
 | Pending | Gray |
-| Under Review | Yellow |
+| Under Review | Yellow/Amber |
 | Accepted | Green |
 | Rejected | Red |
+
+---
+
+## 🔧 Key Technical Notes
+
+- **Sidebar never reloads** — `AdminLayout` is rendered inside `app/admin/layout.tsx` which persists across all admin routes. Only the `<main>` content area re-renders on navigation.
+- **No browser alerts** — All confirmation dialogs (`confirm()`, `alert()`) have been replaced with a custom `ConfirmDialog` component with proper UI, backdrop, and animation.
+- **Firestore long-polling** — `experimentalForceLongPolling: true` is enabled to resolve connectivity issues on high-latency networks.
+- **Fuzzy name matching** — Faculty projects are matched by UID, name (with/without Dr./Prof. prefix), or email to handle various import formats.
+- **Batch writes** — Bulk deletes and project linking use Firestore `writeBatch` with automatic splitting at 490 operations to stay within the 500-operation limit.
 
 ---
 
@@ -265,7 +298,8 @@ Status is updated by admin only via the dropdown in the projects table.
   "firebase": "^12",
   "react-hot-toast": "^2",
   "lucide-react": "^0.383",
-  "tailwindcss": "^4"
+  "tailwindcss": "^4",
+  "xlsx": "^0.18"
 }
 ```
 
@@ -284,6 +318,3 @@ Status is updated by admin only via the dropdown in the projects table.
 ## 📄 License
 
 This project is for academic purposes. All rights reserved.
-
----
-
