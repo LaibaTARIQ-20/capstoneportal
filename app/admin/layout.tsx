@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect } from "react";
@@ -16,10 +15,17 @@ export default function AdminRootLayout({
 
   useEffect(() => {
     if (loading) return;
-    if (!user) { router.push("/login"); return; }
-    if (user.role !== "admin") router.push("/faculty/dashboard");
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+    if (user.role !== "admin") {
+      router.push("/faculty/dashboard");
+      return;
+    }
   }, [user, loading, router]);
 
+  // While auth is loading, show spinner — do NOT return null for children
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
@@ -28,7 +34,14 @@ export default function AdminRootLayout({
     );
   }
 
-  if (!user) return null;
+  // Only block render if definitely not admin
+  if (!user || user.role !== "admin") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+      </div>
+    );
+  }
 
   return <AdminLayout>{children}</AdminLayout>;
 }
