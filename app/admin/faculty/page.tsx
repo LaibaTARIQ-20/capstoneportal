@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import FacultyTable from "@/components/FacultyTable";
-import FacultyExcelUpload from "@/components/FacultyExcelUpload";
 
 export default function AdminFacultyPage() {
   const [showUpload, setShowUpload] = useState(false);
@@ -23,12 +22,7 @@ export default function AdminFacultyPage() {
         onMutation={() => setRefreshKey((k) => k + 1)}
       />
 
-      {showUpload && (
-        <FacultyExcelUpload
-          onImportComplete={() => setRefreshKey((k) => k + 1)}
-          onClose={() => setShowUpload(false)}
-        />
-      )}
+     
     </div>
   );
 }
