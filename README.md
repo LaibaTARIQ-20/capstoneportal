@@ -145,6 +145,7 @@ lib/
 ```
 
 ---
+<img width="512" height="511" alt="image" src="https://github.com/user-attachments/assets/e1446366-044e-4d75-a926-4617f086cdee" />
 
 ## 🚀 Getting Started
 
