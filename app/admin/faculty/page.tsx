@@ -1,28 +1,35 @@
 "use client";
 
-import { useState } from "react";
-import FacultyTable from "@/components/FacultyTable";
+import { useFaculty } from "@/hooks/useFaculty";
+import FacultyTable from "@/components/faculty/FacultyTable";
+import { LoadingSpinner } from "@/components/ui";
+import { useRouter } from "next/navigation";
 
 export default function AdminFacultyPage() {
-  const [showUpload, setShowUpload] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const { faculty, loading, update, remove, bulkRemove } = useFaculty();
+  const router = useRouter();
+
+  if (loading) return <LoadingSpinner />;
 
   return (
     <div>
-      <button type="button" onClick={() => setShowUpload(true)}>
-        Import Faculty
-      </button>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Faculty</h1>
+        <p className="mt-1 text-sm text-gray-600">
+          Manage all faculty members.
+        </p>
+      </div>
 
-      {/* FacultyTable handles all fetch / search / inline-edit / delete */}
       <FacultyTable
-        key={refreshKey}
+        faculty={faculty}
+        onUpdate={update}
+        onDelete={remove}
+        onBulkDelete={bulkRemove}
+        onAdd={() => router.push("/admin/faculty/new")}
         showAddButton={true}
         allowDelete={true}
         allowInlineEdit={true}
-        onMutation={() => setRefreshKey((k) => k + 1)}
       />
-
-     
     </div>
   );
 }

@@ -2,12 +2,16 @@
 
 import { useState } from "react";
 import { FileSpreadsheet } from "lucide-react";
-import ProjectsTable from "@/components/ProjectsTable";
+import { useProjects } from "@/hooks/useProjects";
+import ProjectsTable from "@/components/projects/ProjectsTable";
 import ExcelUpload from "@/components/ExcelUpload";
+import { LoadingSpinner } from "@/components/ui";
 
 export default function AdminProjectsPage() {
+  const { projects, loading, remove, bulkRemove, refetch } = useProjects();
   const [showUpload, setShowUpload] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
+
+  if (loading) return <LoadingSpinner />;
 
   return (
     <div>
@@ -27,11 +31,16 @@ export default function AdminProjectsPage() {
         </button>
       </div>
 
-      <ProjectsTable key={refreshKey} isAdmin={true} />
+      <ProjectsTable
+        projects={projects}
+        isAdmin={true}
+        onDelete={remove}
+        onBulkDelete={bulkRemove}
+      />
 
       {showUpload && (
         <ExcelUpload
-          onImportComplete={() => setRefreshKey((k) => k + 1)}
+          onImportComplete={refetch}
           onClose={() => setShowUpload(false)}
         />
       )}

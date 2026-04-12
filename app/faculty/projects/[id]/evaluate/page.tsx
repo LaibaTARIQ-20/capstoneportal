@@ -458,9 +458,7 @@ export default function EvaluatePage() {
         {
           ...evals,
           projectId: id,
-          projectTitle: project.title,
           facultyId: user?.uid,
-          facultyName: user?.name,
           updatedAt: Timestamp.now(),
         },
         { merge: true },

@@ -1,9 +1,11 @@
+// app/admin/layout.tsx
 "use client";
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import AdminLayout from "@/components/AdminLayout";
+import AdminLayout from "@/components/layout/AdminLayout";
+import { PageSpinner } from "@/components/ui";
 
 export default function AdminRootLayout({
   children,
@@ -25,23 +27,7 @@ export default function AdminRootLayout({
     }
   }, [user, loading, router]);
 
-  // While auth is loading, show spinner — do NOT return null for children
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-      </div>
-    );
-  }
-
-  // Only block render if definitely not admin
-  if (!user || user.role !== "admin") {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-      </div>
-    );
-  }
+  if (loading || !user || user.role !== "admin") return <PageSpinner />;
 
   return <AdminLayout>{children}</AdminLayout>;
 }

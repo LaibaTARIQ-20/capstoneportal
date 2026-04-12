@@ -1,35 +1,13 @@
-
 "use client";
 
-import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { useStats } from "@/hooks/useStats";
 import { FolderOpen, Users } from "lucide-react";
+import { InlineSpinner } from "@/components/ui";
 
 export default function AdminDashboardPage() {
   const { user } = useAuth();
-  const [stats, setStats]               = useState({ totalProjects: 0, totalFaculty: 0 });
-  const [statsLoading, setStatsLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user) return;
-    const fetchStats = async () => {
-      setStatsLoading(true);
-      try {
-        const [projectsSnap, usersSnap] = await Promise.all([
-          getDocs(collection(db, "projects")),
-          getDocs(query(collection(db, "users"), where("role", "==", "faculty"))),
-        ]);
-        setStats({
-          totalProjects: projectsSnap.size,
-          totalFaculty:  usersSnap.size,
-        });
-      } catch { /* silent */ }
-      finally { setStatsLoading(false); }
-    };
-    fetchStats();
-  }, [user]);
+  const { stats, loading } = useStats();
 
   return (
     <div>
@@ -40,10 +18,9 @@ export default function AdminDashboardPage() {
         </p>
       </div>
 
-      {statsLoading ? (
+      {loading ? (
         <div className="flex items-center gap-2 text-sm text-gray-400">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
-          Loading stats...
+          <InlineSpinner /> Loading stats...
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -51,7 +28,9 @@ export default function AdminDashboardPage() {
             <div className="mb-3 inline-flex rounded-xl bg-blue-50 p-2">
               <FolderOpen size={20} className="text-blue-600" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">{stats.totalProjects}</p>
+            <p className="text-3xl font-bold text-gray-900">
+              {stats.totalProjects}
+            </p>
             <p className="mt-1 text-sm font-semibold uppercase tracking-wide text-gray-400">
               Total Projects
             </p>
@@ -60,7 +39,9 @@ export default function AdminDashboardPage() {
             <div className="mb-3 inline-flex rounded-xl bg-purple-50 p-2">
               <Users size={20} className="text-purple-600" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">{stats.totalFaculty}</p>
+            <p className="text-3xl font-bold text-gray-900">
+              {stats.totalFaculty}
+            </p>
             <p className="mt-1 text-sm font-semibold uppercase tracking-wide text-gray-400">
               Total Faculty
             </p>

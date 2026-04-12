@@ -18,7 +18,7 @@ export default function ConfirmDialog({
   title,
   message,
   confirmLabel = "Confirm",
-  cancelLabel  = "Cancel",
+  cancelLabel = "Cancel",
   confirmColor = "red",
   onConfirm,
   onCancel,
@@ -26,8 +26,8 @@ export default function ConfirmDialog({
   if (!isOpen) return null;
 
   const colorMap = {
-    red:   "bg-red-600 hover:bg-red-700",
-    blue:  "bg-blue-600 hover:bg-blue-700",
+    red: "bg-red-600 hover:bg-red-700",
+    blue: "bg-blue-600 hover:bg-blue-700",
     green: "bg-green-600 hover:bg-green-700",
   };
 
@@ -41,7 +41,6 @@ export default function ConfirmDialog({
 
       {/* Dialog */}
       <div className="relative w-full max-w-md rounded-2xl bg-white shadow-2xl border border-gray-100 p-6 animate-in fade-in zoom-in duration-200">
-
         {/* Close button */}
         <button
           onClick={onCancel}
@@ -51,14 +50,25 @@ export default function ConfirmDialog({
         </button>
 
         {/* Icon */}
-        <div className={`mb-4 inline-flex rounded-xl p-3 ${
-          confirmColor === "red" ? "bg-red-50" :
-          confirmColor === "green" ? "bg-green-50" : "bg-blue-50"
-        }`}>
-          <AlertTriangle size={22} className={
-            confirmColor === "red" ? "text-red-600" :
-            confirmColor === "green" ? "text-green-600" : "text-blue-600"
-          } />
+        <div
+          className={`mb-4 inline-flex rounded-xl p-3 ${
+            confirmColor === "red"
+              ? "bg-red-50"
+              : confirmColor === "green"
+                ? "bg-green-50"
+                : "bg-blue-50"
+          }`}
+        >
+          <AlertTriangle
+            size={22}
+            className={
+              confirmColor === "red"
+                ? "text-red-600"
+                : confirmColor === "green"
+                  ? "text-green-600"
+                  : "text-blue-600"
+            }
+          />
         </div>
 
         {/* Title */}
@@ -82,7 +92,6 @@ export default function ConfirmDialog({
             {confirmLabel}
           </button>
         </div>
-
       </div>
     </div>
   );

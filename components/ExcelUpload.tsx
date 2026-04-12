@@ -13,8 +13,7 @@ import {
   Upload, X, FileSpreadsheet,
   AlertCircle, CheckCircle, AlertTriangle,
 } from "lucide-react";
-import ConfirmDialog from "@/components/ConfirmDialog";
-
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
