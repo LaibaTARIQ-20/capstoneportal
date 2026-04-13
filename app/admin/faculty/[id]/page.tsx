@@ -5,8 +5,22 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc, Timestamp } from "firebase/firestore";
-import { ArrowLeft, Save, Mail } from "lucide-react";
+import { Save, Mail } from "lucide-react";
 import toast from "react-hot-toast";
+
+import {
+  PageHeader,
+  Card,
+  CardHeader,
+  CardBody,
+  CardFooter,
+  FormField,
+  Input,
+  Select,
+  Button,
+  Avatar,
+  Badge,
+} from "@/components/ui";
 
 interface Faculty {
   id: string;
@@ -20,16 +34,16 @@ interface Faculty {
 }
 
 function DesignationBadge({ designation }: { designation: string }) {
-  const map: Record<string, string> = {
-    "Professor":           "bg-purple-100 text-purple-700",
-    "Associate Professor": "bg-blue-100 text-blue-700",
-    "Assistant Professor": "bg-cyan-100 text-cyan-700",
-    "Lecturer":            "bg-green-100 text-green-700",
+  const map: Record<string, import("@/components/ui").BadgeColor> = {
+    "Professor":           "purple",
+    "Associate Professor": "blue",
+    "Assistant Professor": "cyan",
+    "Lecturer":            "green",
   };
   return (
-    <span className={`rounded-full px-3 py-1 text-xs font-bold ${map[designation] || "bg-gray-100 text-gray-600"}`}>
+    <Badge color={map[designation] || "gray"}>
       {designation || "—"}
-    </span>
+    </Badge>
   );
 }
 
@@ -116,153 +130,117 @@ export default function AdminFacultyDetailPage() {
 
   if (!user || !faculty) return null;
 
-  const inputCls = "w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all";
-  const labelCls = "block mb-2 text-xs font-bold uppercase tracking-wide text-gray-600";
-
   return (
     <>
-      {/* Top bar */}
-      <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
-        <button
-          onClick={() => router.push("/admin/faculty")}
-          className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900 transition-colors"
-        >
-          <ArrowLeft size={16} />Back to Faculty
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-green-700 transition-colors disabled:opacity-50 shadow-sm"
-        >
-          {saving ? (
-            <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />Saving...</>
-          ) : (
-            <><Save size={15} />Save Changes</>
-          )}
-        </button>
-      </div>
+      <PageHeader
+        title={name || faculty.name}
+        onBack={() => router.push("/admin/faculty")}
+        backLabel="Back to Faculty"
+        action={
+          <Button
+            variant="success"
+            onClick={handleSave}
+            loading={saving}
+            icon={<Save />}
+            loadingLabel="Saving..."
+          >
+            Save Changes
+          </Button>
+        }
+      />
 
       {/* Profile banner */}
-      <div className="mb-6 rounded-2xl border border-gray-200 bg-white px-6 py-5 shadow-sm">
-        <div className="flex items-center gap-5 flex-wrap">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-xl font-bold text-white shadow">
-            {name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("")}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap mb-1.5">
-              <h1 className="text-lg font-bold text-gray-900">{name || faculty.name}</h1>
-              <DesignationBadge designation={designation || faculty.designation} />
-              <span className={`rounded-full px-3 py-1 text-xs font-bold ${
-                (gender || faculty.gender) === "Female"
-                  ? "bg-pink-100 text-pink-700"
-                  : "bg-blue-100 text-blue-700"
-              }`}>
-                {gender || faculty.gender}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-4">
-              <span className="flex items-center gap-1.5 text-sm text-gray-600">
-                <Mail size={13} className="text-gray-400" />{faculty.email}
-              </span>
-              <span className="text-sm text-gray-500">
-                Joined: {formatDate(faculty.joinedAt)}
-              </span>
+      <Card className="mb-6">
+        <CardBody>
+          <div className="flex items-center gap-5 flex-wrap">
+            <Avatar name={name || faculty.name} size="xl" color="blue" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                <h1 className="text-lg font-bold text-gray-900">{name || faculty.name}</h1>
+                <DesignationBadge designation={designation || faculty.designation} />
+                <Badge color={(gender || faculty.gender) === "Female" ? "pink" : "blue"}>
+                  {gender || faculty.gender}
+                </Badge>
+              </div>
+              <div className="flex flex-wrap gap-4">
+                <span className="flex items-center gap-1.5 text-sm text-gray-600">
+                  <Mail size={13} className="text-gray-400" />{faculty.email}
+                </span>
+                <span className="text-sm text-gray-500">
+                  Joined: {formatDate(faculty.joinedAt)}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </CardBody>
+      </Card>
 
       {/* Edit form */}
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="border-b border-gray-100 bg-gray-50 px-6 py-4">
-          <p className="text-sm font-bold text-gray-800">Edit Faculty Details</p>
-          <p className="text-xs text-gray-500 mt-0.5">Update the faculty member information below</p>
-        </div>
-
-        <div className="px-6 py-6">
+      <Card>
+        <CardHeader
+          title="Edit Faculty Details"
+          subtitle="Update the faculty member information below"
+        />
+        <CardBody>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-
-            {/* Full Name — full width */}
-            <div className="col-span-1 sm:col-span-2 lg:col-span-3">
-              <label className={labelCls}>Full Name</label>
-              <input
+            <FormField label="Full Name" className="col-span-1 sm:col-span-2 lg:col-span-3">
+              <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className={inputCls}
               />
-            </div>
+            </FormField>
 
-            {/* Department */}
-            <div>
-              <label className={labelCls}>Department</label>
-              <input
+            <FormField label="Department">
+              <Input
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 placeholder="e.g. Software Engineering"
-                className={inputCls}
               />
-            </div>
+            </FormField>
 
-            {/* Designation */}
-            <div>
-              <label className={labelCls}>Designation</label>
-              <select
+            <FormField label="Designation">
+              <Select
                 value={designation}
                 onChange={(e) => setDesignation(e.target.value)}
-                className={inputCls}
-              >
-                <option value="">Select designation</option>
-                <option value="Professor">Professor</option>
-                <option value="Associate Professor">Associate Professor</option>
-                <option value="Assistant Professor">Assistant Professor</option>
-                <option value="Lecturer">Lecturer</option>
-              </select>
-            </div>
+                placeholder="Select designation"
+                options={[
+                  { value: "Professor", label: "Professor" },
+                  { value: "Associate Professor", label: "Associate Professor" },
+                  { value: "Assistant Professor", label: "Assistant Professor" },
+                  { value: "Lecturer", label: "Lecturer" },
+                ]}
+              />
+            </FormField>
 
-            {/* Gender */}
-            <div>
-              <label className={labelCls}>Gender</label>
-              <select
+            <FormField label="Gender">
+              <Select
                 value={gender}
                 onChange={(e) => setGender(e.target.value)}
-                className={inputCls}
-              >
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-              </select>
-            </div>
+                options={[
+                  { value: "Male", label: "Male" },
+                  { value: "Female", label: "Female" },
+                ]}
+              />
+            </FormField>
 
-            {/* Phone */}
-            <div>
-              <label className={labelCls}>Phone</label>
-              <input
+            <FormField label="Phone">
+              <Input
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="e.g. 03001234567"
-                className={inputCls}
               />
-            </div>
-
+            </FormField>
           </div>
-
-          <div className="mt-6 border-t border-gray-100 pt-6 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => router.push("/admin/faculty")}
-              className="rounded-xl border-2 border-gray-200 px-6 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="rounded-xl bg-green-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-green-700 transition-colors disabled:opacity-50"
-            >
-              {saving ? "Saving..." : "Save Changes"}
-            </button>
-          </div>
-        </div>
-      </div>
+        </CardBody>
+        <CardFooter>
+          <Button variant="outline" type="button" onClick={() => router.push("/admin/faculty")}>
+            Cancel
+          </Button>
+          <Button variant="success" onClick={handleSave} loading={saving}>
+            Save Changes
+          </Button>
+        </CardFooter>
+      </Card>
     </>
   );
 }

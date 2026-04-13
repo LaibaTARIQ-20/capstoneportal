@@ -2,7 +2,7 @@
 
 import { useFaculty } from "@/hooks/useFaculty";
 import FacultyTable from "@/components/faculty/FacultyTable";
-import { LoadingSpinner } from "@/components/ui";
+import { LoadingSpinner, PageHeader } from "@/components/ui";
 import { useRouter } from "next/navigation";
 
 export default function AdminFacultyPage() {
@@ -13,12 +13,10 @@ export default function AdminFacultyPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Faculty</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Manage all faculty members.
-        </p>
-      </div>
+      <PageHeader
+        title="Faculty"
+        subtitle="Manage all faculty members."
+      />
 
       <FacultyTable
         faculty={faculty}

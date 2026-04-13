@@ -7,7 +7,6 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import {
-  ArrowLeft,
   User,
   Building2,
   Globe,
@@ -15,6 +14,7 @@ import {
   ClipboardList,
   Calendar,
 } from "lucide-react";
+import { PageHeader, Button, InfoCard, Badge, PageSpinner } from "@/components/ui";
 
 interface Project {
   id: string;
@@ -59,12 +59,7 @@ export default function FacultyProjectDetailPage() {
     fetch();
   }, [id, user, loading, router]);
 
-  if (loading || fetching)
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-      </div>
-    );
+  if (loading || fetching) return <PageSpinner />;
 
   if (!project) return null;
 
@@ -106,172 +101,129 @@ export default function FacultyProjectDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 px-8 py-8">
-      <div >
-        {/* Back + actions */}
-        <div className="mb-6 flex items-center justify-between">
-          <button
-            onClick={() => router.push("/faculty/projects")}
-            className="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
-          >
-            <ArrowLeft size={16} />
-            Back to Projects
-          </button>
-
-          <button
+      <PageHeader
+        title=""
+        onBack={() => router.push("/faculty/projects")}
+        backLabel="Back to Projects"
+        action={
+          <Button
+            variant="success"
             onClick={() => router.push(`/faculty/projects/${id}/evaluate`)}
-            className="flex items-center gap-2 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-green-700 transition-colors shadow-sm"
+            icon={<ClipboardList />}
           >
-            <ClipboardList size={15} />
             Evaluate Project
-          </button>
-        </div>
+          </Button>
+        }
+      />
 
-        {/* Hero card */}
-        <div className="mb-5 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-mono text-gray-400 mb-1.5">
-                ID: {project.id}
+      {/* Hero card */}
+      <div className="mb-5 flex flex-col gap-4 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-mono text-gray-400 mb-1.5">
+              ID: {project.id}
+            </p>
+            <h1 className="text-xl font-bold text-gray-900 leading-snug">
+              {project.title}
+            </h1>
+            {project.description && (
+              <p className="mt-3 text-sm text-gray-600 leading-relaxed">
+                {project.description}
               </p>
-              <h1 className="text-xl font-bold text-gray-900 leading-snug">
-                {project.title}
-              </h1>
-              {project.description && (
-                <p className="mt-3 text-sm text-gray-600 leading-relaxed">
-                  {project.description}
-                </p>
-              )}
-              {uploadDate && (
-                <div className="mt-4 flex items-center gap-1.5 text-xs text-gray-400">
-                  <Calendar size={12} />
-                  <span>Uploaded {uploadDate}</span>
-                </div>
-              )}
-            </div>
-            {project.sdg && (
-              <div
-                className="shrink-0 rounded-xl px-4 py-2 text-sm font-bold text-white"
-                style={{ backgroundColor: sdgColor }}
-              >
-                {project.sdg}
+            )}
+            {uploadDate && (
+              <div className="mt-4 flex items-center gap-1.5 text-xs text-gray-400">
+                <Calendar size={12} />
+                <span>Uploaded {uploadDate}</span>
               </div>
             )}
           </div>
+          {project.sdg && (
+            <div
+              className="shrink-0 rounded-xl px-4 py-2 text-sm font-bold text-white"
+              style={{ backgroundColor: sdgColor }}
+            >
+              {project.sdg}
+            </div>
+          )}
         </div>
+      </div>
 
-        {/* Info grid */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 mb-5">
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-2.5">
-              <div className="rounded-lg bg-blue-50 p-1.5">
-                <User size={14} className="text-blue-600" />
-              </div>
-              <p className="text-xs font-bold uppercase tracking-wide text-gray-400">
-                Supervisor
-              </p>
-            </div>
-            <p className="text-sm font-semibold text-gray-900">
-              {project.supervisor || "—"}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-2.5">
-              <div className="rounded-lg bg-purple-50 p-1.5">
-                <User size={14} className="text-purple-600" />
-              </div>
-              <p className="text-xs font-bold uppercase tracking-wide text-gray-400">
-                Co-Supervisor
-              </p>
-            </div>
-            <p className="text-sm font-semibold text-gray-900">
-              {project.coSupervisor && project.coSupervisor !== "None"
-                ? project.coSupervisor
-                : "—"}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-2.5">
-              <div className="rounded-lg bg-orange-50 p-1.5">
-                <Building2 size={14} className="text-orange-600" />
-              </div>
-              <p className="text-xs font-bold uppercase tracking-wide text-gray-400">
-                Industrial Partner
-              </p>
-            </div>
-            <p className="text-sm font-semibold text-gray-900">
-              {project.industrialPartner && project.industrialPartner !== "None"
-                ? project.industrialPartner
-                : "—"}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-2.5">
-              <div className="rounded-lg bg-green-50 p-1.5">
-                <Globe size={14} className="text-green-600" />
-              </div>
-              <p className="text-xs font-bold uppercase tracking-wide text-gray-400">
-                SDG Goal
-              </p>
-            </div>
-            {project.sdg ? (
+      {/* Info grid */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 mb-5">
+        <InfoCard
+          icon={<User />}
+          label="Supervisor"
+          value={project.supervisor || "—"}
+        />
+        <InfoCard
+          icon={<User />}
+          label="Co-Supervisor"
+          value={project.coSupervisor && project.coSupervisor !== "None" ? project.coSupervisor : "—"}
+        />
+        <InfoCard
+          icon={<Building2 />}
+          label="Industrial Partner"
+          value={project.industrialPartner && project.industrialPartner !== "None" ? project.industrialPartner : "—"}
+        />
+        <InfoCard
+          icon={<Globe />}
+          label="SDG Goal"
+          value={
+            project.sdg ? (
               <span
                 className="inline-block rounded-lg px-3 py-1 text-xs font-bold text-white"
                 style={{ backgroundColor: sdgColor }}
               >
                 {project.sdg}
               </span>
-            ) : (
-              <p className="text-sm font-semibold text-gray-900">—</p>
-            )}
+            ) : "—"
+          }
+        />
+      </div>
+
+      {/* Group Members */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="flex items-center gap-2 mb-5">
+          <div className="rounded-lg bg-blue-50 p-1.5">
+            <Users size={14} className="text-blue-600" />
           </div>
+          <p className="text-xs font-bold uppercase tracking-wide text-gray-400">
+            Group Members ({students.length})
+          </p>
         </div>
 
-        {/* Group Members */}
-        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="flex items-center gap-2 mb-5">
-            <div className="rounded-lg bg-blue-50 p-1.5">
-              <Users size={14} className="text-blue-600" />
-            </div>
-            <p className="text-xs font-bold uppercase tracking-wide text-gray-400">
-              Group Members ({students.length})
-            </p>
-          </div>
-
-          {students.length === 0 ? (
-            <p className="text-sm text-gray-400">No students listed.</p>
-          ) : (
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3">
-              {students.map((student, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 hover:border-blue-200 hover:bg-blue-50 transition-colors"
-                >
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
-                    {i + 1}
-                  </div>
-                  <span className="text-sm font-semibold text-gray-900">
-                    {student}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {students.length > 0 && (
-            <div className="mt-5 border-t border-gray-100 pt-4">
-              <button
-                onClick={() => router.push(`/faculty/projects/${id}/evaluate`)}
-                className="flex items-center gap-2 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-green-700 transition-colors"
+        {students.length === 0 ? (
+          <p className="text-sm text-gray-400">No students listed.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3">
+            {students.map((student, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 hover:border-blue-200 hover:bg-blue-50 transition-colors"
               >
-                <ClipboardList size={15} />
-                Start Evaluation
-              </button>
-            </div>
-          )}
-        </div>
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+                  {i + 1}
+                </div>
+                <span className="text-sm font-semibold text-gray-900">
+                  {student}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {students.length > 0 && (
+          <div className="mt-5 border-t border-gray-100 pt-4">
+            <Button
+              variant="success"
+              icon={<ClipboardList />}
+              onClick={() => router.push(`/faculty/projects/${id}/evaluate`)}
+            >
+              Start Evaluation
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

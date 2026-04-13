@@ -55,3 +55,27 @@ export async function bulkDeleteProjects(ids: string[]): Promise<void> {
     await batch.commit();
   }
 }
+
+// ─── Bulk import ──────────────────────────────────────────────────────────────
+export async function bulkImportProjects(projectsPayload: Partial<Project>[]): Promise<void> {
+  // Split into chunks of 490 to respect Firestore batch limits
+  const chunks: Partial<Project>[][] = [];
+  for (let i = 0; i < projectsPayload.length; i += 490) {
+    chunks.push(projectsPayload.slice(i, i + 490));
+  }
+  
+  for (const chunk of chunks) {
+    const batch = writeBatch(db);
+    chunk.forEach((project) => {
+      const newDocRef = doc(collection(db, COL));
+      batch.set(newDocRef, {
+        ...project,
+        status: "pending",
+        uploadedBy: "excel_import",
+        uploadedAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+    });
+    await batch.commit();
+  }
+}

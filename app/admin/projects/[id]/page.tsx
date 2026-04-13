@@ -5,9 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { doc, getDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useConfirm } from "@/hooks/useConfirm";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { ArrowLeft, Trash2, User, Building2, Globe, Users } from "lucide-react";
-import { LoadingSpinner } from "@/components/ui";
+import { Trash2, User, Building2, Globe, Users } from "lucide-react";
+import { LoadingSpinner, PageHeader, Button, InfoCard, Badge, ConfirmDialog } from "@/components/ui";
 import toast from "react-hot-toast";
 import type { Project } from "@/types";
 
@@ -74,75 +73,45 @@ export default function AdminProjectDetailPage() {
         onCancel={handleCancel}
       />
 
-      {/* Top bar */}
-      <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
-        <button
-          onClick={() => router.push("/admin/projects")}
-          className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900 transition-colors"
-        >
-          <ArrowLeft size={16} /> Back to Projects
-        </button>
-        <button
-          onClick={handleDelete}
-          disabled={deleting}
-          className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 transition-colors disabled:opacity-50"
-        >
-          {deleting ? (
-            <>
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />{" "}
-              Deleting...
-            </>
-          ) : (
-            <>
-              <Trash2 size={15} /> Delete Project
-            </>
-          )}
-        </button>
-      </div>
-
-      <p className="mb-2 text-xs font-mono text-gray-400">ID: {project.id}</p>
-      <h1 className="mb-6 text-2xl font-bold text-gray-900">{project.title}</h1>
+      <PageHeader
+        title={project.title}
+        subtitle={`ID: ${project.id}`}
+        onBack={() => router.push("/admin/projects")}
+        backLabel="Back to Projects"
+        action={
+          <Button
+            variant="danger"
+            onClick={handleDelete}
+            loading={deleting}
+            loadingLabel="Deleting..."
+            icon={<Trash2 />}
+          >
+            Delete Project
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-gray-400">
-            <User size={13} /> Supervisor
-          </div>
-          <p className="text-base font-bold text-gray-900">
-            {project.supervisor || "—"}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-gray-400">
-            <User size={13} /> Co-Supervisor
-          </div>
-          <p className="text-base font-bold text-gray-900">
-            {project.coSupervisor && project.coSupervisor !== "None"
-              ? project.coSupervisor
-              : "—"}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-gray-400">
-            <Building2 size={13} /> Industrial Partner
-          </div>
-          <p className="text-base font-bold text-gray-900">
-            {project.industrialPartner && project.industrialPartner !== "None"
-              ? project.industrialPartner
-              : "—"}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-gray-400">
-            <Globe size={13} /> SDG
-          </div>
-          <span className="inline-block rounded-full bg-green-50 px-3 py-1 text-sm font-bold text-green-700">
-            {project.sdg || "—"}
-          </span>
-        </div>
+        <InfoCard
+          icon={<User />}
+          label="Supervisor"
+          value={project.supervisor || "—"}
+        />
+        <InfoCard
+          icon={<User />}
+          label="Co-Supervisor"
+          value={project.coSupervisor && project.coSupervisor !== "None" ? project.coSupervisor : "—"}
+        />
+        <InfoCard
+          icon={<Building2 />}
+          label="Industrial Partner"
+          value={project.industrialPartner && project.industrialPartner !== "None" ? project.industrialPartner : "—"}
+        />
+        <InfoCard
+          icon={<Globe />}
+          label="SDG"
+          value={project.sdg ? <Badge color="green">{project.sdg}</Badge> : "—"}
+        />
 
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:col-span-2">
           <div className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-gray-400">

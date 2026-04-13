@@ -8,12 +8,13 @@ import { getAllEvaluations } from "@/services/evaluations/evaluations.service";
 import { useRouter } from "next/navigation";
 import {
   Eye,
-  Search,
   ClipboardList,
   FolderOpen,
   CheckCircle2,
 } from "lucide-react";
-import { LoadingSpinner } from "@/components/ui";
+import { LoadingSpinner, DataTable } from "@/components/ui";
+import type { ColumnDef } from "@/components/ui";
+import type { Project } from "@/types";
 
 type EvalStatus = "not_started" | "in_progress" | "complete";
 
@@ -100,13 +101,12 @@ function EvalBadge({ status }: { status: EvalStatus }) {
 
 export default function FacultyProjectsPage() {
   const { user } = useAuth();
-  const { projects, loading } = useProjects ();
+  const { projects, loading } = useProjects();
   const router = useRouter();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [evalMap, setEvalMap] = useState<Record<string, any>>({});
   const [evalsLoading, setEvalsLoading] = useState(true);
-  const [search, setSearch] = useState("");
 
   useEffect(() => {
     getAllEvaluations()
@@ -114,15 +114,7 @@ export default function FacultyProjectsPage() {
       .finally(() => setEvalsLoading(false));
   }, []);
 
-  const filtered = projects.filter((p) => {
-    const q = search.toLowerCase();
-    return (
-      p.title?.toLowerCase().includes(q) ||
-      p.supervisor?.toLowerCase().includes(q) ||
-      p.sdg?.toLowerCase().includes(q)
-    );
-  });
-
+  // Build eval status map for all projects
   const evalStatuses = Object.fromEntries(
     projects.map((p) => [
       p.id,
@@ -133,6 +125,68 @@ export default function FacultyProjectsPage() {
   const completedCount = Object.values(evalStatuses).filter(
     (s) => s === "complete",
   ).length;
+
+  // ── Column definitions ──────────────────────────────────────────────────────
+  const columns: ColumnDef<Project>[] = [
+    {
+      key: "index",
+      header: "#",
+      className: "w-10 text-xs font-medium text-gray-400",
+      cell: (_, index) => index + 1,
+    },
+    {
+      key: "title",
+      header: "Project Title",
+      sortable: true,
+      cell: (project) => {
+        const isComplete = evalStatuses[project.id] === "complete";
+        return (
+          <div className="flex items-start gap-2">
+            {isComplete && (
+              <CheckCircle2 size={15} className="text-green-500 shrink-0 mt-0.5" />
+            )}
+            <div>
+              <p className={`font-semibold truncate max-w-[200px] ${isComplete ? "text-green-900" : "text-gray-900"}`}>
+                {project.title}
+              </p>
+              {project.sdg && (
+                <p className="text-xs text-green-600 mt-0.5">{project.sdg}</p>
+              )}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: "supervisor",
+      header: "Supervisor",
+      sortable: true,
+      cell: (project) => (
+        <span className="text-gray-700">{project.supervisor || "—"}</span>
+      ),
+    },
+    {
+      key: "students",
+      header: "Members",
+      cell: (project) => {
+        const count = Array.isArray(project.students)
+          ? project.students.length
+          : (project.studentCount ?? 0);
+        return (
+          <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+            {count} Members
+          </span>
+        );
+      },
+    },
+    {
+      key: "evaluation",
+      header: "Evaluation",
+      cell: (project) => (
+        <EvalBadge status={evalStatuses[project.id] ?? "not_started"} />
+      ),
+    },
+  ];
 
   if (loading || evalsLoading) return <LoadingSpinner />;
 
@@ -152,127 +206,38 @@ export default function FacultyProjectsPage() {
         )}
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-5 py-4">
-          <div className="relative flex-1 min-w-50 max-w-sm">
-            <Search
-              size={15}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-            />
-            <input
-              type="text"
-              placeholder="Search by title, supervisor, SDG..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-          <p className="text-sm font-medium text-gray-500">
-            {filtered.length} project{filtered.length !== 1 ? "s" : ""}
-          </p>
-        </div>
-
-        {/* Table */}
-        {filtered.length === 0 ? (
-          <div className="py-20 text-center">
-            <FolderOpen size={40} className="mx-auto mb-3 text-gray-200" />
-            <p className="text-sm font-semibold text-gray-500">
-              No projects found
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b border-gray-100 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                <tr>
-                  <th className="px-4 py-3 text-left">#</th>
-                  <th className="px-4 py-3 text-left">Project Title</th>
-                  <th className="px-4 py-3 text-left">Supervisor</th>
-                  <th className="px-4 py-3 text-left">Members</th>
-                  <th className="px-4 py-3 text-left">Evaluation</th>
-                  <th className="px-4 py-3 text-left">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filtered.map((project, index) => {
-                  const status = evalStatuses[project.id] || "not_started";
-                  const isComplete = status === "complete";
-                  const students = Array.isArray(project.students)
-                    ? project.students.length
-                    : (project.studentCount ?? 0);
-                  return (
-                    <tr
-                      key={project.id}
-                      className={`transition-colors ${isComplete ? "bg-green-50/40 hover:bg-green-50" : "hover:bg-gray-50"}`}
-                    >
-                      <td className="px-4 py-3.5 text-xs font-medium text-gray-400">
-                        {index + 1}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-start gap-2">
-                          {isComplete && (
-                            <CheckCircle2
-                              size={15}
-                              className="text-green-500 shrink-0 mt-0.5"
-                            />
-                          )}
-                          <div>
-                            <p
-                              className={`font-semibold truncate max-w-50 ${isComplete ? "text-green-900" : "text-gray-900"}`}
-                            >
-                              {project.title}
-                            </p>
-                            {project.sdg && (
-                              <p className="text-xs text-green-600 mt-0.5">
-                                {project.sdg}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5 text-sm text-gray-700">
-                        {project.supervisor || "—"}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                          {students} Members
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <EvalBadge status={status} />
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() =>
-                              router.push(`/faculty/projects/${project.id}`)
-                            }
-                            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
-                          >
-                            <Eye size={12} /> View
-                          </button>
-                          <button
-                            onClick={() =>
-                              router.push(
-                                `/faculty/projects/${project.id}/evaluate`,
-                              )
-                            }
-                            className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 transition-colors"
-                          >
-                            <ClipboardList size={12} />
-                            {isComplete ? "Re-evaluate" : "Evaluate"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <DataTable<Project>
+        data={projects}
+        columns={columns}
+        rowIdKey="id"
+        countLabel="project"
+        searchPlaceholder="Search by title, supervisor, SDG…"
+        searchFields={["title", "supervisor", "sdg"]}
+        emptyMessage="No projects found."
+        emptyIcon={<FolderOpen size={40} />}
+        renderRowActions={(project) => {
+          const isComplete = evalStatuses[project.id] === "complete";
+          return (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => router.push(`/faculty/projects/${project.id}`)}
+                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
+              >
+                <Eye size={12} /> View
+              </button>
+              <button
+                onClick={() =>
+                  router.push(`/faculty/projects/${project.id}/evaluate`)
+                }
+                className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 transition-colors"
+              >
+                <ClipboardList size={12} />
+                {isComplete ? "Re-evaluate" : "Evaluate"}
+              </button>
+            </div>
+          );
+        }}
+      />
     </div>
   );
 }

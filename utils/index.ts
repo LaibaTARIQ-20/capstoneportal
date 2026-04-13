@@ -1,5 +1,4 @@
 import { Timestamp } from "firebase/firestore";
-import { ProjectStatus } from "@/types";
 
 export function formatTimestamp(ts: Timestamp | null | undefined): string {
   if (!ts) return "—";
