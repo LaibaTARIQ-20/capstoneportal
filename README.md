@@ -8,7 +8,7 @@ A full-stack **Final Year Project (FYP) management platform** built with Next.js
 
 ### Admin Capabilities
 - **Authentication**: Secure login via email/password or Google OAuth.
-- **Projects Management**: View all projects using an interactive data table with global search, column sorting, and bulk-selection.
+- **Projects Management**: View all projects using an interactive data table with global search, column sorting, and bulk selection.
 - **Excel Import**: Bulk import projects from `.xlsx` files with automatic duplicate detection, data validation, and batch write support.
 - **Faculty Management**: View, add, delete, and **inline-edit** faculty members directly within the table using React Hook Form.
 
@@ -33,7 +33,7 @@ Page  ↓  renders  →  Component (UI Primitives)
 
 1. **Pages (`app/`)**: Define layout structure and routing. They call higher-level hooks and render UI components. Zero direct Firestore calls.
 2. **Hooks (`hooks/`)**: Abstract away complex domain state and data fetching lifecycle (loading/error tracking). 
-3. **Services (`services/`)**: Pure, async Firestore functions handling database operations (CRUD, Batching, Transacitons). Zero React dependency.
+3. **Services (`services/`)**: Pure, async Firestore functions handling database operations (CRUD, Batching, Transactions). Zero React dependency.
 4. **Shared Utilities (`utils/`)**: Pure formatting and parsing logic (e.g. `excelParser.ts`, `formatTimestamp`).
 5. **UI Primitives (`components/ui/`)**: A highly composable, strictly typed custom component library including generic abstractions like `DataTable<T>`.
 
@@ -47,8 +47,8 @@ The repository features a custom-built, generic UI design system located in `com
   - Generics-based `ColumnDef` for strict type safety.
   - Built-in search, sort, pagination, and bulk selections.
   - **Inline Editing**: Features `EditableRow` which spawns isolated `react-hook-form` instances per row to allow high-performance inline editing without re-rendering the parent table.
-- **`Card` Family**: `Card`, `CardHeader`, `CardBody`, `CardFooter`, and `InfoCard` for standardized section wrappers.
-- **`Button`**: Centralized interactive elements with variant mapping (`primary`, `success`, `danger`, `outline`, `ghost`) and internal loading states (`<InlineSpinner>`).
+- **`Card` Family**: `Card`, `CardHeader`, `CardBody`, `CardFooter`, and `InfoCard` for standardised section wrappers.
+- **`Button`**: Centralised interactive elements with variant mapping (`primary`, `success`, `danger`, `outline`, `ghost`) and internal loading states (`<InlineSpinner>`).
 - **`FormField`**: Wrapper handling labels, hints, and error messaging uniformly across `Input`, `Select`, and `Textarea`.
 - **`Badge` & `Avatar`**: Consistent visual status and user identification components.
 
@@ -74,13 +74,13 @@ The repository features a custom-built, generic UI design system located in `com
 ```text
 app/
     admin/               # Admin routes, layouts, and dashboards
-    faculty/             # Faculty routes, layouts, and evaluation forms
+    Faculty/             # Faculty routes, layouts, and evaluation forms
     login/               # Auth gateway
     layout.tsx           # Global Root layout, AuthProvider, and Toaster
 components/
     ui/                  # The generic UI design system (DataTable, Button, FormField, etc.)
     layout/              # Persistent Sidebars to prevent reload-flashing
-    faculty/             # Domain-specific Faculty components 
+    Faculty/             # Domain-specific Faculty components 
     projects/            # Domain-specific Project components
     ExcelUpload.tsx      # Multi-step drag-and-drop Excel parser modal
 context/
@@ -188,15 +188,15 @@ C --> D[Final]
 ```
 
 - Each phase unlocks only when the previous phase is complete for the active student.
-- Each student is evaluated independently allowing mixed phase-states within the same project team.
+- Each student is evaluated independently, allowing mixed phase-states within the same project team.
 - Live progress is tracked visually through green success checks per student and per phase.
 
 ---
 
 ## 🤝 Contributing
 
-This project relies on strict type definitions (`npm run lint` & `npx tsc --noEmit` must pass).
-When creating new components, ensure they utilize the `components/ui` primitives rather than manually writing standard HTML tags or Tailwind layout utility classes.
+This project relies on strict type definitions that must pass.
+When creating new components, ensure they utilise the `components/ui` primitives rather than manually writing standard HTML tags or Tailwind layout utility classes.
 
 ## 📄 License
 This codebase is for academic purposes. All rights reserved.
